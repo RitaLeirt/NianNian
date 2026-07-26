@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>念念 NianNian · PRD 原型图文档</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#F3EFE6; --sidebar:#F7F3EA; --paper:#FFF; --paper-2:#FBF8F1;
+    --sage:#8AA88C; --sage-soft:#DCE7DA; --sage-deep:#5F7A61; --amber:#DC9A41;
+    --rust:#C15B3A; --ink:#33302A; --ink-soft:#6B665C; --ink-faint:#9A9488; --line:#E7E1D4;
+    --font-display:"PingFang SC","Noto Sans SC",system-ui,sans-serif; --font-body:"PingFang SC","Noto Sans SC",system-ui,sans-serif; --font-mono:"JetBrains Mono",ui-monospace,monospace;
+    --shadow-card:0 2px 10px rgba(90,80,60,.06),0 8px 24px rgba(90,80,60,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font-body);background:var(--bg);color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 32px 100px}
+
+  /* 顶栏 */
+  .doc-top{position:sticky;top:0;z-index:20;background:rgba(247,243,234,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:16px 32px;display:flex;align-items:center;gap:14px}
+  .doc-top .logo{width:38px;height:38px;border-radius:11px;background:var(--sage-soft);display:flex;align-items:center;justify-content:center;font-size:20px}
+  .doc-top h1{font-family:var(--font-display);font-size:19px;margin:0;letter-spacing:1px}
+  .doc-top .meta{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint)}
+
+  /* Hero */
+  .hero{padding:60px 0 30px;border-bottom:1px solid var(--line)}
+  .hero .kick{font-family:var(--font-mono);font-size:12.5px;color:var(--sage-deep);letter-spacing:1px;margin:0 0 12px}
+  .hero h2{font-family:var(--font-display);font-size:40px;line-height:1.25;margin:0 0 16px}
+  .hero p{font-size:16px;color:var(--ink-soft);max-width:640px;margin:0}
+  .tldr{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:34px}
+  .tldr .c{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow-card)}
+  .tldr .c .t{font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px}
+  .tldr .c .v{font-family:var(--font-display);font-size:17px;margin-top:6px}
+
+  section{padding:48px 0;border-bottom:1px solid var(--line)}
+  h3.sec{font-family:var(--font-display);font-size:26px;margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  .sec-num{font-family:var(--font-mono);font-size:13px;color:#fff;background:var(--sage);width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
+  .lead{color:var(--ink-soft);font-size:15px;margin:0 0 26px}
+
+  /* 站点地图 */
+  .sitemap{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:20px}
+  .node{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:var(--shadow-card)}
+  .node h4{font-family:var(--font-display);font-size:19px;margin:0 0 4px}
+  .node .path{font-family:var(--font-mono);font-size:12px;color:var(--sage-deep);background:var(--sage-soft);padding:2px 8px;border-radius:8px;display:inline-block;margin-bottom:12px}
+  .node ul{margin:8px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink-soft)}
+  .node li{margin:3px 0}
+  .switch{text-align:center;color:var(--sage);font-size:13px}
+  .switch .big{font-size:26px;display:block}
+
+  /* 线框图 */
+  .wire{background:var(--paper);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-card);margin-bottom:14px}
+  .wire-cap{background:var(--paper-2);border-bottom:1px dashed var(--line);padding:9px 16px;font-family:var(--font-mono);font-size:12px;color:var(--ink-soft)}
+  .wire-body{padding:18px}
+  .frame{border:1.5px dashed var(--ink-faint);border-radius:10px;padding:12px;position:relative}
+  .frame + .frame{margin-top:12px}
+  .tag{position:absolute;top:-9px;left:12px;background:var(--bg);padding:0 6px;font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint)}
+  .row{display:flex;gap:12px}
+  .row > *{flex:1}
+  .ph{background:var(--paper-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--ink-soft);min-height:38px;display:flex;align-items:center}
+  .ph.solid{background:var(--sage);color:#fff;border:none;justify-content:center;font-weight:500}
+  .ph.ghost{background:transparent}
+  .ph.pill{border-radius:20px;flex:none;padding:6px 14px;min-height:auto}
+  .wf-layout{display:grid;grid-template-columns:180px 1fr;gap:12px}
+  .wf-side{background:var(--sidebar);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .wf-nav{font-size:12.5px;color:var(--ink-soft);padding:7px 10px;border-radius:8px;margin-bottom:3px}
+  .wf-nav.on{background:var(--sage-soft);color:var(--sage-deep);font-weight:700}
+  .cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .mini-card{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--paper)}
+  .mini-card .st{font-family:var(--font-mono);font-size:10px;float:right}
+  .mini-card .st.u{color:var(--rust)} .mini-card .st.p{color:var(--amber)} .mini-card .st.s{color:var(--ink-faint)}
+  .mini-card h6{font-family:var(--font-display);font-size:13.5px;margin:2px 0 6px}
+  .mini-card .l{font-size:11px;color:var(--ink-soft);margin:1px 0}
+  .mini-card .ball{font-size:20px;text-align:right;margin-top:4px}
+  .callout{background:var(--sage-soft);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--sage-deep);margin-top:10px}
+
+  /* 流程 */
+  .flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow-card)}
+  .step .n{width:26px;height:26px;border-radius:50%;background:var(--sage);color:#fff;font-family:var(--font-mono);display:inline-flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .step h5{font-family:var(--font-display);font-size:15px;margin:0 0 4px}
+  .step p{font-size:12.5px;color:var(--ink-soft);margin:0}
+  .arrow{align-self:center;color:var(--sage);font-size:18px}
+
+  /* 表格 */
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.4px;font-weight:500}
+  td .badge{font-family:var(--font-mono);font-size:11px;padding:2px 8px;border-radius:8px;background:var(--paper-2);color:var(--ink-soft)}
+  td .badge.get{background:#E3EDE4;color:var(--sage-deep)} td .badge.post{background:#F6EAD6;color:#9B6C1E}
+  td .badge.put{background:#E6E1F0;color:#6A5A9B} td .badge.del{background:#F6E0D8;color:var(--rust)}
+  .req{color:var(--rust);font-weight:700}
+
+  /* 设计 tokens */
+  .tokens{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+  .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .sw{border-radius:10px;height:56px;border:1px solid var(--line);display:flex;align-items:flex-end;padding:6px;font-family:var(--font-mono);font-size:9.5px}
+  .card-box{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow-card)}
+  .type-row{display:flex;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px dashed var(--line)}
+  .type-row .lbl{font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);width:80px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .nongoals{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .nongoals li{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 14px 12px 38px;font-size:13.5px;color:var(--ink-soft);position:relative}
+  .nongoals li::before{content:"✕";position:absolute;left:14px;color:var(--rust);font-weight:700}
+
+  .note{font-size:12.5px;color:var(--ink-faint);margin-top:8px}
+  @media(max-width:860px){
+    .tldr,.sitemap,.tokens,.grid2,.nongoals{grid-template-columns:1fr}
+    .wf-layout{grid-template-columns:1fr}
+    .hero h2{font-size:30px}
+  }
+</style>
+</head>
+<body>
+  <div class="doc-top">
+    <div class="logo">🐱</div>
+    <h1>念念 NianNian · PRD 原型图文档</h1>
+    <span class="meta">v1.0 · 2026-07-23 · 概念定稿</span>
+  </div>
+
+  <div class="wrap">
+
+    <!-- Hero / TL;DR -->
+    <div class="hero">
+      <p class="kick">陪伴的猫 · 悬念事项管理 · 本地优先</p>
+      <h2>替你念着那些悬着的事的一只猫。</h2>
+      <p>念念是一个本地优先的个人「外部前额叶」——替你盯着那些悬而未决、常卡在别人手里的事，在合适的时候提醒你该推进什么、怎么说。判断下一步靠<strong>确定性推算</strong>（进度打卡 + 模板节点 + DDL/优先级），而非 AI 瞎猜。</p>
+      <div class="tldr">
+        <div class="c"><div class="t">定位</div><div class="v">外部前额叶</div></div>
+        <div class="c"><div class="t">机制</div><div class="v">一条闭环 + 一个看板</div></div>
+        <div class="c"><div class="t">人群</div><div class="v">进度责任人</div></div>
+        <div class="c"><div class="t">形态</div><div class="v">Web + 陪伴猫</div></div>
+      </div>
+    </div>
+
+    <!-- 1. 站点结构 -->
+    <section>
+      <h3 class="sec"><span class="sec-num">1</span>站点结构</h3>
+      <p class="lead">两个页面共用一套设计系统。理念介绍页是对外门面，工作台是真正能用的操作界面，随时可互相切换。</p>
+      <div class="sitemap">
+        <div class="node">
+          <h4>理念介绍页</h4>
+          <span class="path">/landing · 默认首页</span>
+          <ul>
+            <li>Hero + 双 CTA</li>
+            <li>为什么会有这只猫（3 用户故事）</li>
+            <li>核心机制 push 四步</li>
+            <li>看板 pull 三视图</li>
+            <li>灵魂 / 皮囊 / 骨架</li>
+            <li>🧶 球三态图解</li>
+            <li>三大支撑系统 · 明确不做 · 收尾 CTA</li>
+          </ul>
+        </div>
+        <div class="switch">
+          <span class="big">⇄</span>
+          顶栏 tab / CTA<br>返回按钮
+        </div>
+        <div class="node">
+          <h4>念念工作台</h4>
+          <span class="path">/app · 操作界面</span>
+          <ul>
+            <li>顶部工具栏：返回 / 深色 / 统计 / 搜索</li>
+            <li>记一笔（半展开解析）</li>
+            <li>三视图看板（今日 / 本周 / 全部）</li>
+            <li>话术模板 · 日记本</li>
+            <li>桌宠猫浮层（拖拽 / 撸 / 记一笔 / 冒泡）</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 理念页线框 -->
+    <section>
+      <h3 class="sec"><span class="sec-num">2</span>线框图 · 理念介绍页</h3>
+      <p class="lead">对外门面，一屏讲清"念念是什么、为什么用它、它怎么工作"。</p>
+      <div class="wire">
+        <div class="wire-cap">landing.html — 顶栏 sticky + 纵向叙事</div>
+        <div class="wire-body">
+          <div class="frame"><span class="tag">TOPNAV</span>
+            <div class="row" style="align-items:center">
+              <div class="ph" style="flex:0 0 120px">🐱 念念</div>
+              <div class="ph ghost pill">理念介绍</div>
+              <div class="ph ghost pill">念念工作台</div>
+              <div class="ph solid pill" style="margin-left:auto">进入工作台 🧶</div>
+            </div>
+          </div>
+          <div class="frame"><span class="tag">HERO</span>
+            <div class="row">
+              <div>
+                <div class="ph ghost" style="border:none;font-family:var(--font-display);font-size:20px;color:var(--ink)">那些悬着的事，交给念念替你盯着。</div>
+                <div class="row" style="margin-top:10px">
+                  <div class="ph solid" style="flex:0 0 150px">进入工作台 🧶</div>
+                  <div class="ph ghost" style="flex:0 0 130px;border:1px solid var(--line)">看看它怎么工作</div>
+                </div>
+              </div>
+              <div class="ph" style="flex:0 0 160px;justify-content:center;font-size:34px">🐱🧶</div>
+            </div>
+          </div>
+          <div class="frame"><span class="tag">SECTIONS · 纵向叙事</span>
+            <div class="cards3">
+              <div class="ph" style="justify-content:center">用户故事 ×3</div>
+              <div class="ph" style="justify-content:center">push 四步</div>
+              <div class="ph" style="justify-content:center">看板三视图</div>
+              <div class="ph" style="justify-content:center">灵魂/皮囊/骨架</div>
+              <div class="ph" style="justify-content:center">🧶 球三态</div>
+              <div class="ph" style="justify-content:center">明确不做</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 工作台线框 -->
+    <section>
+      <h3 class="sec"><span class="sec-num">3</span>线框图 · 念念工作台</h3>
+      <p class="lead">左侧边栏切视图，右侧主区记一笔 + 看板卡片，右下角一只随时可互动的猫。</p>
+      <div class="wire">
+        <div class="wire-cap">app.html — 侧边栏 248px + 弹性工作区 + 桌宠浮层</div>
+        <div class="wire-body">
+          <div class="wf-layout">
+            <div class="wf-side">
+              <div class="ph ghost" style="border:none;font-family:var(--font-display);color:var(--ink);padding:0 0 8px">🐱 念念</div>
+              <div class="wf-nav on">☀️ 今日 · 2</div>
+              <div class="wf-nav">🗓️ 本周 · 4</div>
+              <div class="wf-nav">📦 全部 · 5</div>
+              <div class="wf-nav">⚙️ 模板</div>
+              <div class="wf-nav">📓 日记本</div>
+              <div class="ph" style="justify-content:center;margin-top:16px;font-size:22px">😴💤</div>
+            </div>
+            <div>
+              <div class="frame" style="margin-top:0"><span class="tag">TOPBAR</span>
+                <div class="row" style="align-items:center">
+                  <div class="ph ghost pill" style="border:1px solid var(--line);flex:none">← 理念介绍</div>
+                  <div class="ph ghost pill" style="border:1px solid var(--line);flex:none">🌙</div>
+                  <div class="ph ghost" style="border:none;font-family:var(--font-mono);font-size:11px">⏰ 2 逾期 · ✨ 3 完成</div>
+                  <div class="ph pill" style="flex:none;margin-left:auto">🔍 搜索…</div>
+                </div>
+              </div>
+              <div class="frame"><span class="tag">记一笔 + 半展开解析</span>
+                <div class="ph">🧶 记一笔悬着的事…</div>
+                <div class="row" style="margin-top:8px">
+                  <div class="ph pill">球在对方 ▾</div><div class="ph pill">对方</div>
+                  <div class="ph pill">在等</div><div class="ph pill">DDL</div>
+                  <div class="ph solid pill">确认并添加</div>
+                </div>
+              </div>
+              <div class="frame"><span class="tag">看板卡片网格</span>
+                <div class="cards3">
+                  <div class="mini-card"><span class="st u">Urgent</span><h6>报价后跟进</h6><div class="l">下一步：跟进话术</div><div class="l">凉了 3 天</div><div class="ball">🧶</div></div>
+                  <div class="mini-card"><span class="st p">Pending</span><h6>尾款确认</h6><div class="l">对方：阿哲</div><div class="l">DDL 8月1日</div><div class="ball">🧶</div></div>
+                  <div class="mini-card"><span class="st s">Stuck</span><h6>跨部门协同</h6><div class="l">双向卡住</div><div class="l">凉了 5 天</div><div class="ball">🧶</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="callout">🐱 桌宠浮层固定在右下角：可拖拽移动、点击撸猫涨亲密度、点「🧶 记一笔」直接对它说事、有逾期时主动冒泡「要不要推一下？」。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 核心机制 -->
+    <section>
+      <h3 class="sec"><span class="sec-num">4</span>核心机制 · push / pull 双视角</h3>
+      <p class="lead">push：念念主动推给你；pull：你主动俯瞰看板。判断下一步 = 确定性推算，不是 AI 自由发挥。</p>
+      <div class="flow">
+        <div class="step"><span class="n">1</span><h5>记一笔</h5><p>一句话说清，念念用规则先猜一版。</p></div>
+        <span class="arrow">→</span>
+        <div class="step"><span class="n">2</span><h5>念念盯着</h5><p>确定性推算紧急度（凉的天数 × 10 + 球权重 + DDL 梯度）。</p></div>
+        <span class="arrow">→</span>
+        <div class="step"><span class="n">3</span><h5>到点提醒</h5><p>凉够了或快逾期，桌宠冒泡附话术。</p></div>
+        <span class="arrow">→</span>
+        <div class="step"><span class="n">4</span><h5>打卡</h5><p>推进 / 完成，日记本自动沉淀。</p></div>
+      </div>
+      <div class="callout" style="margin-top:16px">紧急度公式（server/db.js）：<code style="font-family:var(--font-mono)">urgency = coldDays×10 + (mine:8 / stuck:14) + (high:12) + ddlGradient(逾期100/今日60/2天内40/7天内15)</code></div>
+    </section>
+
+    <!-- 5. 数据模型 -->
+    <section>
+      <h3 class="sec"><span class="sec-num">5</span>悬念数据模型</h3>
+      <p class="lead">录入红线：用户唯一必填只有那句原话，其余由念念解析 / 推断 / 默认，用户只做"确认或改"。</p>
+      <table>
+        <tr><th>档</th><th>字段</th><th>谁来填</th></tr>
+        <tr><td><span class="req">🟢 必填</span></td><td>原话 / 标题（<code>title</code>）</td><td>用户唯一必填</td></tr>
+        <tr><td>🔵 解析可改</td><td>球在谁手里 <code>who</code> · 对方 <code>person</code> · 在等 <code>waiting</code> · 下一步 <code>next_step</code> · 截止 <code>ddl</code></td><td>念念自动抽，瞄一眼可改</td></tr>
+        <tr><td>⚪ 全默认</td><td>优先级 <code>priority</code> · 完成 <code>done</code> · 凉的天数 <code>cold_days</code> · 状态 <code>status</code></td><td>默认 / 自动算</td></tr>
+      </table>
+      <p class="note">🧶 「球在谁手里」逻辑上是球场的球（ball in court，谁该动），视觉上是猫的毛线球——球在爪边=该我动、球在远处=等对方、球缠住=卡住。</p>
+    </section>
+
+    <!-- 6. 三大支撑系统 -->
+    <section>
+      <h3 class="sec"><span class="sec-num">6</span>三大支撑系统（骨架）</h3>
+      <div class="cards3">
+        <div class="card-box"><h4 style="font-family:var(--font-display);margin:0 0 6px">🧩 模板生态</h4><p style="font-size:13px;color:var(--ink-soft);margin:0">常见场景的悬念模板，复用只改参数。内置销售 / 自由职业 / 运营 / 通用四套。</p></div>
+        <div class="card-box"><h4 style="font-family:var(--font-display);margin:0 0 6px">💬 话术引擎</h4><p style="font-size:13px;color:var(--ink-soft);margin:0">轻默认 + 重可选：按对方职业零输入生成得体话术，占位 {对方}{在等}{事} 实时替换。</p></div>
+        <div class="card-box"><h4 style="font-family:var(--font-display);margin:0 0 6px">📓 日记本</h4><p style="font-size:13px;color:var(--ink-soft);margin:0">每个动作自动沉淀（记 / 推 / 完成），一键生成本周日记摘要——留存命门。</p></div>
+      </div>
+    </section>
+
+    <!-- 7. API -->
+    <section>
+      <h3 class="sec"><span class="sec-num">7</span>REST API 契约</h3>
+      <p class="lead">Node 内置 <code>node:http</code> + <code>node:sqlite</code>，零 npm 依赖。所有写操作带输入校验与友好错误。</p>
+      <table>
+        <tr><th>方法</th><th>路径</th><th>说明</th></tr>
+        <tr><td><span class="badge post">POST</span></td><td>/api/parse</td><td>确定性解析一句话为字段草稿</td></tr>
+        <tr><td><span class="badge get">GET</span></td><td>/api/items?view=today｜week｜all</td><td>看板列表 + 三视图计数</td></tr>
+        <tr><td><span class="badge post">POST</span></td><td>/api/items</td><td>新建（校验：标题非空 / who / priority）</td></tr>
+        <tr><td><span class="badge put">PATCH</span></td><td>/api/items/:id</td><td>部分更新（编辑）</td></tr>
+        <tr><td><span class="badge post">POST</span></td><td>/api/items/:id/push｜complete｜restore</td><td>推进 / 完成 / 恢复</td></tr>
+        <tr><td><span class="badge del">DEL</span></td><td>/api/items/:id</td><td>删除</td></tr>
+        <tr><td><span class="badge get">GET</span></td><td>/api/search?q= · /api/stats · /api/archive</td><td>搜索 / 统计 / 归档</td></tr>
+        <tr><td><span class="badge post">POST</span></td><td>/api/render</td><td>用模板为某事项渲染话术</td></tr>
+        <tr><td><span class="badge get">GET</span></td><td>/api/journal · /api/journal/weekly</td><td>日记列表 / 生成周记</td></tr>
+        <tr><td><span class="badge get">GET</span></td><td>/api/pet · /api/pet/pet</td><td>桌宠状态 / 撸猫 +1</td></tr>
+      </table>
+    </section>
+
+    <!-- 8. 设计系统 -->
+    <section>
+      <h3 class="sec"><span class="sec-num">8</span>设计系统 · 日光风</h3>
+      <p class="lead">值夜书房的暖色调、纸感卡片、鼠尾草绿点缀、一枚毛线球图标——好看但从不喧宾夺主。</p>
+      <div class="tokens">
+        <div>
+          <div class="card-box">
+            <div style="font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);margin-bottom:10px">COLOR TOKENS（暖中性，绝不纯灰）</div>
+            <div class="swatches">
+              <div class="sw" style="background:#F3EFE6">底 #F3EFE6</div>
+              <div class="sw" style="background:#8AA88C;color:#fff">鼠尾草</div>
+              <div class="sw" style="background:#DC9A41;color:#fff">暖强调</div>
+              <div class="sw" style="background:#C15B3A;color:#fff">紧急</div>
+              <div class="sw" style="background:#33302A;color:#fff">主文字</div>
+              <div class="sw" style="background:#6B665C;color:#fff">次文字</div>
+              <div class="sw" style="background:#DCE7DA">选中底</div>
+              <div class="sw" style="background:#1E1C1A;color:#fff">暗色底</div>
+            </div>
+          </div>
+          <div class="card-box" style="margin-top:16px">
+            <div style="font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);margin-bottom:8px">MOTION</div>
+            <p style="font-size:13px;margin:0;color:var(--ink-soft)">缓动 <code style="font-family:var(--font-mono)">cubic-bezier(0.16,1,0.3,1)</code>（快入慢出）· 微交互 120–220ms · 尊重 prefers-reduced-motion。</p>
+          </div>
+        </div>
+        <div class="card-box">
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);margin-bottom:10px">TYPOGRAPHY</div>
+          <div class="type-row"><span class="lbl">Display</span><span style="font-family:var(--font-display);font-size:24px;font-weight:700">PingFang SC · 念念</span></div>
+          <div class="type-row"><span class="lbl">Body</span><span style="font-family:var(--font-body);font-size:15px">PingFang SC · 那些悬着的事</span></div>
+          <div class="type-row"><span class="lbl">Mono</span><span style="font-family:var(--font-mono);font-size:14px">JetBrains Mono · Urgent 3d</span></div>
+          <p class="note">主字体统一用苹方（PingFang SC），标题靠字重与字号拉开层次；非苹果系统回退到 Noto Sans SC。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. Non-goals -->
+    <section style="border-bottom:none">
+      <h3 class="sec"><span class="sec-num">9</span>明确不做（Non-goals）</h3>
+      <p class="lead">凡是让"记事更可靠、更省力"的，优先级永远高于让"猫更可爱"的。</p>
+      <ul class="nongoals">
+        <li>不做塞满一切的待办 App，只盯悬念事项</li>
+        <li>不做真·系统桌面挂件，就是网页里的交互猫</li>
+        <li>看板不做自定义 / 拖拽 / 甘特图</li>
+        <li>话术不强制建"同事画像库"</li>
+        <li>不接入真实生产环境，进度靠打卡</li>
+        <li>判断下一步不靠 AI 自由发挥</li>
+      </ul>
+    </section>
+
+  </div>
+</body>
+</html>

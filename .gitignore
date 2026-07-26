@@ -1,0 +1,5 @@
+node_modules/
+data/niannian.db
+data/niannian.db-*
+.DS_Store
+/tmp/

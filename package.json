@@ -1,0 +1,13 @@
+{
+  "name": "niannian-app",
+  "version": "1.0.0",
+  "description": "念念 NianNian — 陪伴的猫 · 悬念事项管理（前后端一体）",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
