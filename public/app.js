@@ -850,8 +850,16 @@
     $('#schDetail').querySelector('[data-sa="toggle"]').addEventListener('click', async function () {
       await API.post('/api/schedules/' + s.id + '/toggle'); toast(s.enabled ? '已禁用' : '已启用'); loadSchedules();
     });
-    $('#schDetail').querySelector('[data-sa="test"]').addEventListener('click', function () {
-      toast('已触发一次测试运行 🐱'); pet.react && pet.react('happy');
+    $('#schDetail').querySelector('[data-sa="test"]').addEventListener('click', async function () {
+      try {
+        var item = await API.post('/api/schedules/' + s.id + '/test', {});
+        if (item && item.id) {
+          toast('已生成事项：「' + item.title + '」已加入看板');
+          loadSchedules(); // 刷新定时任务列表（更新 run_count）
+          if (typeof refreshItems === 'function') refreshItems(); // 同步刷新事项看板
+        } else { toast('任务不存在或已禁用'); }
+      } catch (err) { toast('执行失败：' + (err.message || '未知错误')); }
+      pet.react && pet.react('happy');
     });
     $('#schDetail').querySelector('[data-sa="edit"]').addEventListener('click', function () { openSchModal(s); });
     $('#schDetail').querySelector('[data-sa="del"]').addEventListener('click', async function () {

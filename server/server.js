@@ -356,6 +356,11 @@ async function handleApi(req, res, url) {
         const s = Schedules.toggle(owner, id);
         return s ? sendJSON(res, 200, s) : sendError(res, 404, '任务不存在');
       }
+      // 测试执行一次定时任务（生成事项到看板）
+      if (method === 'POST' && id && action === 'test') {
+        const item = Schedules.run(owner, id);
+        return item ? sendJSON(res, 200, item) : sendError(res, 404, '任务不存在或已禁用');
+      }
       if (method === 'DELETE' && id) {
         Schedules.remove(owner, id);
         return sendJSON(res, 200, { ok: true });

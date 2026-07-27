@@ -237,10 +237,12 @@ function seedFor(owner) {
   if (schCount === 0) {
     const ins = db.prepare('INSERT INTO schedules (owner, name, desc, cron_label, enabled, run_count, next_run, created_at) VALUES (?,?,?,?,?,?,?,?)');
     const nextAt = (h, m) => { const d = new Date(); d.setHours(h, m, 0, 0); if (d.getTime() < now) d.setDate(d.getDate() + 1); return d.getTime(); };
-    ins.run(owner, '工作日 18:00 生成周报存入日记本', '到点自动汇总本周动态，写一条日记，不看事项状态。', '工作日 18:00 执行', 1, 3, nextAt(18, 0), now);
-    ins.run(owner, '每周一 09:30 批量检查在等对方的事项', '扫一遍"球在对方"的事，提前预警凉太久的。', '周一 09:30 执行', 1, 2, nextAt(9, 30), now);
-    ins.run(owner, '尾款/回复催办', '对绑定了对接人的事项，到点发起催办草稿。', '工作日 20:30 执行', 0, 1, nextAt(20, 30), now);
-    ins.run(owner, '每周五 21:30 整理周报草稿', '汇总本周悬念动态，一键生成周报草稿。', '周五 21:30 执行', 1, 0, nextAt(21, 30), now);
+    // 工作日 18:00 提醒生成日报发送给上级
+    ins.run(owner, '工作日生成日报', '提醒自己生成{日期}日报发送给上级', '工作日 18:00 执行', 1, 3, nextAt(18, 0), now);
+    // 每周五 20:00 提醒整理周报草稿发给上级
+    ins.run(owner, '周五整理周报', '提醒自己整理周报草稿发给上级', '周五 20:00 执行', 1, 2, nextAt(20, 0), now);
+    // 每周三 09:00 提醒跟实习生沟通
+    ins.run(owner, '周三沟通实习生', '提醒自己跟实习生沟通', '周三 09:00 执行', 1, 1, nextAt(9, 0), now);
   }
 
   const jrnCount = db.prepare('SELECT COUNT(*) c FROM journal WHERE owner=?').get(owner).c;
@@ -748,6 +750,31 @@ const Schedules = {
     return Schedules.get(owner, id);
   },
   remove(owner, id) { db.prepare('DELETE FROM schedules WHERE id=? AND owner=?').run(id, owner); },
+  // 执行一次定时任务：根据任务的 desc/template 生成一条悬念事项写入看板，并记录日记。
+  // 测试按钮和真实调度都走这个方法，保证"定时任务→事项看板"联动。
+  run(owner, id) {
+    const s = db.prepare('SELECT * FROM schedules WHERE id=? AND owner=?').get(id, owner);
+    if (!s || !s.enabled) return null;
+    const template = s.desc || s.name || '定时提醒';
+    // 简单模板替换：{日期} → 今天日期
+    const now = new Date();
+    const dateStr = (now.getMonth() + 1) + '月' + now.getDate() + '日';
+    const title = template.replace(/\{周报\}/g, '周报').replace(/\{日期\}/g, dateStr).slice(0, 40);
+    const it = Items.create(owner, {
+      title: title,
+      who: 'mine',
+      person: '',
+      waiting: '',
+      next_step: '我来推进',
+      ddl: null,
+      ddl_label: '',
+      priority: 'normal',
+    });
+    Journal.add(owner, 'note', '定时任务「' + s.name + '」自动生成：' + it.title);
+    db.prepare('UPDATE schedules SET run_count=run_count+1, next_run=? WHERE id=? AND owner=?')
+      .run(Date.now(), id, owner);
+    return it;
+  },
 };
 
 module.exports = { db, DEFAULT_OWNER, Auth, seedFor, Parser, Items, Journal, Templates, Pet, Schedules, Colleagues, DAY };
