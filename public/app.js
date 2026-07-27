@@ -843,23 +843,11 @@
       '<p class="sch-d-desc">' + (s.desc ? esc(s.desc) : '（暂无说明）') + '</p>' +
       '<div class="sch-d-actions">' +
         '<button class="btn btn-ghost" data-sa="toggle">' + (s.enabled ? '⏸ 禁用' : '▶ 启用') + '</button>' +
-        '<button class="btn btn-ghost" data-sa="test">▷ 测试</button>' +
         '<button class="btn btn-ghost" data-sa="edit">✎ 编辑</button>' +
-        '<button class="btn btn-ghost sch-del" data-sa="del">🗑 删除</button>' +
+        '<button class="btn btn-ghost sch-del" data-sa="del"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg> 删除</button>' +
       '</div>';
     $('#schDetail').querySelector('[data-sa="toggle"]').addEventListener('click', async function () {
       await API.post('/api/schedules/' + s.id + '/toggle'); toast(s.enabled ? '已禁用' : '已启用'); loadSchedules();
-    });
-    $('#schDetail').querySelector('[data-sa="test"]').addEventListener('click', async function () {
-      try {
-        var item = await API.post('/api/schedules/' + s.id + '/test', {});
-        if (item && item.id) {
-          toast('已生成事项：「' + item.title + '」已加入看板');
-          loadSchedules(); // 刷新定时任务列表（更新 run_count）
-          if (typeof refreshItems === 'function') refreshItems(); // 同步刷新事项看板
-        } else { toast('任务不存在或已禁用'); }
-      } catch (err) { toast('执行失败：' + (err.message || '未知错误')); }
-      pet.react && pet.react('happy');
     });
     $('#schDetail').querySelector('[data-sa="edit"]').addEventListener('click', function () { openSchModal(s); });
     $('#schDetail').querySelector('[data-sa="del"]').addEventListener('click', async function () {
@@ -1085,7 +1073,7 @@
     var p = await API.get('/api/pet');
     $('#setName').value = p.name || '念念';
     $$('.tone-opt').forEach(function (b) { b.classList.toggle('is-on', b.getAttribute('data-tone') === (p.tone || 'gentle')); });
-    $$('.skin-opt').forEach(function (b) { if (!b.disabled) b.classList.toggle('is-on', b.getAttribute('data-skin') === (p.skin || 'default')); });
+    $$('.skin-opt').forEach(function (b) { b.classList.toggle('is-on', b.getAttribute('data-skin') === (p.skin || 'cat')); });
   }
   var setNameTimer;
   $('#setName').addEventListener('input', function () {
@@ -1105,6 +1093,18 @@
       if (pet.setTone) pet.setTone(tone);
       var demo = { gentle: '好，我会温柔地替你盯着。', terse: '收到。切极简模式。', witty: '行吧，那我可要开始毒舌了哦～' };
       pet.say && pet.say(demo[tone]); toast('语气已切换');
+    });
+  });
+
+  // 皮肤切换
+  $$('.skin-opt').forEach(function (b) {
+    b.addEventListener('click', async function () {
+      var skin = this.getAttribute('data-skin');
+      $$('.skin-opt').forEach(function (x) { x.classList.toggle('is-on', x === this); }.bind(this));
+      await API.put('/api/pet', { skin: skin });
+      var names = { cat:'小猫咪🐱', dog:'小狗🐕', seal:'海豹🦭', moon:'月亮🌙' };
+      toast('已切换外观：' + (names[skin] || skin));
+      pet.react && pet.react('happy');
     });
   });
 
@@ -1139,9 +1139,61 @@
     try {
       var t = await API.put('/api/auth/token', { regenerate: true });
       setToken(t.token);
-      toast('已生成新 Token');
+      // 展示结果弹窗（工作区记录：名称 / Token / 创建时间）
+      $('#regenName').textContent = t.label || '我的工作区';
+      $('#regenToken').textContent = t.token;
+      $('#regenTime').textContent = new Date(t.created_at).toLocaleString('zh-CN');
+      $('#regenModal').hidden = false;
       loadTokenPanel();
+      loadWorkspaceRecords();
     } catch (e) { toast('操作失败', 'error'); }
+  });
+  $('#regenClose').addEventListener('click', function () { $('#regenModal').hidden = true; });
+  $('#regenCopy').addEventListener('click', function () {
+    if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textContent);
+    toast('已复制 Token');
+  });
+
+  // 工作区记录列表
+  async function loadWorkspaceRecords() {
+    try {
+      var d = await API.get('/api/auth/tokens');
+      var rows = (d.tokens || []).map(function (r) {
+        return '<tr><td>' + esc(r.label || '我的工作区') + '</td><td><code>' + esc(r.token) + '</code></td><td>' + new Date(r.created_at).toLocaleString('zh-CN') + '</td></tr>';
+      }).join('');
+      $('#wsBody').innerHTML = rows || '<tr><td colspan="3" style="color:var(--ink-3)">暂无记录</td></tr>';
+    } catch (e) { $('#wsBody').innerHTML = '<tr><td colspan="3" style="color:var(--ink-3)">加载失败</td></tr>'; }
+  }
+
+  /* ---------------- AI 设置 ---------------- */
+  function syncAiCfgVisibility(src) {
+    var byo = src === 'byo', ollama = src === 'ollama';
+    $('#aiCfgByo').hidden = !byo;
+    $('#aiCfgBase').hidden = !(byo || ollama);
+    $('#aiCfgModel').hidden = !(byo || ollama);
+  }
+  async function loadAISettings() {
+    try {
+      var s = await API.get('/api/settings');
+      var src = s.aiSource || 'local';
+      var radios = document.querySelectorAll('input[name="aisrc"]');
+      radios.forEach(function (r) { r.checked = (r.value === src); });
+      if (s.apiKey) $('#aiApiKey').value = s.apiKey;
+      if (s.apiBase) $('#aiBase').value = s.apiBase;
+      if (s.model) $('#aiModel').value = s.model;
+      syncAiCfgVisibility(src);
+    } catch (e) {}
+  }
+  document.querySelectorAll('input[name="aisrc"]').forEach(function (r) {
+    r.addEventListener('change', function () { syncAiCfgVisibility(this.value); });
+  });
+  $('#aiSave').addEventListener('click', async function () {
+    var src = (document.querySelector('input[name="aisrc"]:checked') || {}).value || 'local';
+    var payload = { aiSource: src };
+    if (src === 'byo') { payload.apiKey = $('#aiApiKey').value.trim(); payload.apiBase = $('#aiBase').value.trim(); payload.model = $('#aiModel').value.trim(); }
+    if (src === 'ollama') { payload.apiBase = $('#aiBase').value.trim() || 'http://localhost:11434/v1'; payload.model = $('#aiModel').value.trim() || 'llama3'; }
+    try { await API.put('/api/settings', payload); toast('AI 设置已保存'); }
+    catch (e) { toast('保存失败', 'error'); }
   });
 
   /* ---------------- 视图切换 ---------------- */
@@ -1161,7 +1213,7 @@
     else if (view === 'contacts') loadContacts();
     else if (view === 'journal') loadJournal();
     else if (view === 'petsettings') loadPetSettings();
-    else if (view === 'ai') loadTokenPanel();
+    else if (view === 'ai') { loadTokenPanel(); loadWorkspaceRecords(); }
   }
   $$('.nav-item').forEach(function (b) { b.addEventListener('click', function () { switchView(b.getAttribute('data-view')); }); });
 

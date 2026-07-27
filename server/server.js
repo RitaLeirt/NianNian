@@ -13,7 +13,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { Parser, Items, Journal, Templates, Pet, Schedules, Colleagues, Auth, DEFAULT_OWNER, seedFor } = require('./db');
+const { Parser, Items, Journal, Templates, Pet, Schedules, Colleagues, Auth, DEFAULT_OWNER, seedFor, Settings, callAI } = require('./db');
 
 const PORT = process.env.PORT || 8787;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -136,13 +136,36 @@ async function handleApi(req, res, url) {
     if (resource === 'tokens' && method === 'GET') {
       return sendJSON(res, 200, { tokens: Auth.list() });
     }
+    /* ---- AI / 工作区设置 ---- */
+    if (resource === 'settings') {
+      if (method === 'GET') return sendJSON(res, 200, Settings.get(owner));
+      if (method === 'PUT' || method === 'POST') {
+        const body = await readBody(req);
+        if (body === null) return sendError(res, 400, '无效的 JSON 请求体');
+        return sendJSON(res, 200, Settings.set(owner, body));
+      }
+    }
 
     /* ---- 解析预览 ---- */
     if (resource === 'parse' && method === 'POST') {
       const body = await readBody(req);
       if (body === null) return sendError(res, 400, '无效的 JSON 请求体');
       const text = (body.text || '').trim();
-      return sendJSON(res, 200, Parser.parse(text));
+      const base = Parser.parse(text);
+      // 若用户配置了 AI：用语义理解解析一句话，并匹配/归档对接人
+      const ai = await callAI(owner,
+        '你是悬念事项解析器。把用户口语化的一句话抽取为 JSON，字段：' +
+        'title(必填,一句话标题), who(枚举 mine/theirs/stuck), person(对方姓名或空), ' +
+        'waiting(在等什么), next_step(下一步动作), priority(枚举 normal/high), ddl(ISO日期或空)。只输出 JSON，不要解释。',
+        '解析：' + text);
+      if (ai) {
+        try {
+          const obj = JSON.parse(ai.replace(/^```json|```$/g, '').replace(/```/g, '').trim());
+          if (obj.person) { const c = Colleagues.findOrCreate(owner, obj.person); obj.person = c ? c.name : obj.person; }
+          Object.assign(base, obj);
+        } catch (e) { /* 解析失败则保留本地规则结果 */ }
+      }
+      return sendJSON(res, 200, base);
     }
 
     /* ======== Items ======== */
@@ -267,7 +290,8 @@ async function handleApi(req, res, url) {
       }
       // POST /api/journal/weekly
       if (method === 'POST' && (seg[2] === 'weekly' || action === 'weekly')) {
-        return sendJSON(res, 201, Journal.weekly(owner));
+        const text = await Journal.weekly(owner);
+        return sendJSON(res, 201, text);
       }
       // POST /api/journal  (手动添加日记)
       if (method === 'POST') {
@@ -315,12 +339,33 @@ async function handleApi(req, res, url) {
       }
     }
 
-    /* ======== 话术渲染 ======== */
+    /* ======== 话术渲染 / AI 生成话术 ======== */
     if (resource === 'render' && method === 'POST') {
       const body = await readBody(req);
       if (!body.itemId || !body.tplId) return sendError(res, 400, '需要 itemId 和 tplId');
       const r = Templates.render(owner, body.itemId, body.tplId);
       return r ? sendJSON(res, 200, r) : sendError(res, 404, '事项或模板不存在');
+    }
+    // AI 生成话术：结合模板提示词(scorpion) + 对接人身份 + 事项上下文，产出自然话术；未配置 AI 则回退占位符
+    if (resource === 'scripts' && method === 'POST' && action === 'generate') {
+      const body = await readBody(req);
+      if (!body.itemId || !body.tplId) return sendError(res, 400, '需要 itemId 和 tplId');
+      const it = db.prepare('SELECT * FROM items WHERE id=? AND owner=?').get(body.itemId, owner);
+      const tpl = db.prepare('SELECT * FROM templates WHERE id=? AND (builtin=1 OR owner=?)').get(body.tplId, owner);
+      if (!it || !tpl) return sendError(res, 404, '事项或模板不存在');
+      let colleague = null;
+      if (body.colleagueId) colleague = db.prepare('SELECT * FROM colleagues WHERE id=? AND owner=?').get(body.colleagueId, owner);
+      const fallback = Templates.render(owner, body.itemId, body.tplId);
+      const sys = (tpl.scorpion && tpl.scorpion.trim())
+        ? tpl.scorpion
+        : '你是沟通话术助手，根据场景生成一句自然、得体、可直接发送的中文消息。';
+      let user = '场景：' + (tpl.scene || '') + '\n目的：' + (tpl.purpose || '') + '\n事项：' + it.title;
+      if (it.person) user += '\n对方：' + it.person;
+      if (it.waiting) user += '\n在等：' + it.waiting;
+      if (colleague) user += '\n对接人身份：' + (colleague.role || '') + (colleague.persona ? '（' + colleague.persona + '）' : '') + '，关系：' + (colleague.relation || '');
+      user += '\n请生成一句可直接发送的话术。';
+      const ai = await callAI(owner, sys, user);
+      return sendJSON(res, 200, ai ? { text: ai, item: it.title, template: tpl.name, ai: true } : Object.assign(fallback, { ai: false }));
     }
 
     /* ======== Pet ======== */

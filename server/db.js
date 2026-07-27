@@ -128,7 +128,72 @@ CREATE TABLE IF NOT EXISTS schedules (
   next_run    INTEGER,                            -- 下次执行时间戳，可空
   created_at  INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+  owner   TEXT    NOT NULL DEFAULT 'demo-default',
+  k       TEXT    NOT NULL,
+  v       TEXT    DEFAULT '',
+  PRIMARY KEY (owner, k)
+);
 `);
+
+/* ============================================================
+ * Settings：每个工作区的偏好配置（AI 来源 / API Key / 模型等）
+ * ============================================================ */
+const Settings = {
+  get(owner) {
+    const rows = db.prepare('SELECT k, v FROM settings WHERE owner=?').all(owner);
+    const o = {};
+    rows.forEach((r) => { try { o[r.k] = JSON.parse(r.v); } catch (e) { o[r.k] = r.v; } });
+    return o;
+  },
+  set(owner, obj) {
+    const ups = db.prepare('INSERT INTO settings (owner, k, v) VALUES (?,?,?) ON CONFLICT(owner, k) DO UPDATE SET v=excluded.v');
+    Object.keys(obj).forEach((k) => ups.run(owner, k, JSON.stringify(obj[k])));
+    return Settings.get(owner);
+  },
+};
+
+/* ============================================================
+ * callAI：在用户配置了 AI 来源时，调用外部模型（OpenAI 兼容 / Ollama）。
+ * 未配置或调用失败均返回 null，调用方据此回退本地规则。
+ * ============================================================ */
+async function callAI(owner, system, user) {
+  const s = Settings.get(owner);
+  const source = s.aiSource;
+  if (!source || source === 'local') return null; // 本地规则：不调用
+  let baseUrl, apiKey, model, path;
+  if (source === 'byo') {
+    baseUrl = (s.apiBase || 'https://api.openai.com/v1').replace(/\/$/, '');
+    apiKey = s.apiKey || '';
+    model = s.model || 'gpt-4o-mini';
+  } else if (source === 'ollama') {
+    baseUrl = (s.apiBase || 'http://localhost:11434/v1').replace(/\/$/, '');
+    apiKey = s.apiKey || 'ollama';
+    model = s.model || 'llama3';
+  } else {
+    return null;
+  }
+  if (!apiKey || apiKey === 'ollama' && source === 'ollama') { /* ollama 可无 key */ }
+  const url = baseUrl + '/chat/completions';
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 20000);
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+      body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], temperature: 0.7 }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(to);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const text = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    return text ? text.trim() : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 /* 兼容老库：缺列则补上 */
 const tplCols = db.prepare("PRAGMA table_info(templates)").all().map(c => c.name);
@@ -278,7 +343,7 @@ function seedFor(owner) {
 
   const petRow = db.prepare('SELECT owner FROM pet WHERE owner=?').get(owner);
   if (!petRow) {
-    db.prepare("INSERT INTO pet (owner, intimacy, x, y, name, tone, skin) VALUES (?, 0, NULL, NULL, '念念', 'gentle', 'default')").run(owner);
+    db.prepare("INSERT INTO pet (owner, intimacy, x, y, name, tone, skin) VALUES (?, 0, NULL, NULL, '念念', 'gentle', 'cat')").run(owner);
   }
 }
 
@@ -555,19 +620,25 @@ const Journal = {
     return db.prepare('SELECT * FROM journal WHERE id=?').get(r.lastInsertRowid);
   },
   remove(owner, id) { db.prepare('DELETE FROM journal WHERE id=? AND owner=?').run(id, owner); },
-  // 一键生成本周日记：确定性摘要
-  weekly(owner) {
+  // 一键生成本周日记：AI 可增强摘要（配置 AI 时用语义汇总，否则确定性摘要）
+  async weekly(owner) {
     const since = Date.now() - 7 * DAY;
     const rows = db.prepare('SELECT * FROM journal WHERE owner=? AND ts >= ? ORDER BY ts ASC').all(owner, since);
     const notes = rows.filter((r) => r.kind === 'note');
     const pushes = rows.filter((r) => r.kind === 'push');
     const dones = rows.filter((r) => r.kind === 'done');
+    // 先算确定性兜底文本
     const lines = [];
     lines.push(`这一周，念念陪你记下了 ${notes.length} 件悬着的事，推进了 ${pushes.length} 次，放下了 ${dones.length} 件。`);
     if (dones.length) lines.push('放下的：' + dones.map((d) => d.text.replace(/^这件事放下了：?/, '')).join('；'));
     if (pushes.length) lines.push('推进过的：' + pushes.map((p) => p.text).join('；'));
     if (!rows.length) lines.push('这一周很安静，没有新的悬念——也挺好。');
-    const text = lines.join('\n');
+    const fallback = lines.join('\n');
+    // 配置了 AI 时，用语义汇总重写为更自然的周报
+    const ai = await callAI(owner,
+      '你是周报助手。根据本周的「记下的事 / 推进 / 放下」流水，生成一段简洁、自然、可直接发给上级的周报（中文，不超过 200 字，不要列点外的废话）。',
+      fallback);
+    const text = ai || fallback;
     return Journal.add(owner, 'weekly', text);
   },
   // 念念的观察：从历史打卡记录里发现跨事项模式，生成一句可追溯的洞察
@@ -777,4 +848,4 @@ const Schedules = {
   },
 };
 
-module.exports = { db, DEFAULT_OWNER, Auth, seedFor, Parser, Items, Journal, Templates, Pet, Schedules, Colleagues, DAY };
+module.exports = { db, DEFAULT_OWNER, Auth, seedFor, Parser, Items, Journal, Templates, Pet, Schedules, Colleagues, Settings, callAI, DAY };

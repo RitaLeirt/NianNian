@@ -489,12 +489,12 @@
             </div>
           </div>
           <div class="set-row">
-            <div class="set-label"><b>形象自定义</b><span class="badge-soon">P2 · 后期</span><span>可换皮机制（参考 petdex.dev）</span></div>
+            <div class="set-label"><b>形象自定义</b><span>选择桌宠外观</span></div>
             <div class="skin-picker">
-              <button class="skin-opt is-on" data-skin="default" title="默认橘猫">🐱</button>
-              <button class="skin-opt is-locked" disabled title="布偶（待解锁）">🐈</button>
-              <button class="skin-opt is-locked" disabled title="海豹（待解锁）">🦭</button>
-              <button class="skin-opt is-locked" disabled title="瞌睡（待解锁）">😴</button>
+              <button class="skin-opt is-on" data-skin="cat" title="小猫咪">🐱</button>
+              <button class="skin-opt" data-skin="dog" title="小狗">🐕</button>
+              <button class="skin-opt" data-skin="seal" title="海豹">🦭</button>
+              <button class="skin-opt" data-skin="moon" title="月亮">🌙</button>
             </div>
           </div>
         </div>
@@ -530,20 +530,61 @@
         </div>
 
         <!-- AI 来源设置 -->
-        <div class="settings-card settings-disabled" style="margin-top:16px">
+        <div class="settings-card" style="margin-top:16px">
           <div class="set-row">
             <div class="set-label"><b>模型来源</b><span>用哪个大脑来解析悬念、润色话术</span></div>
             <div class="ai-source">
-              <label class="ai-opt"><input type="radio" name="aisrc" checked disabled /> 本地规则（当前演示版）</label>
-              <label class="ai-opt"><input type="radio" name="aisrc" disabled /> 自带 API Key（BYO）</label>
-              <label class="ai-opt"><input type="radio" name="aisrc" disabled /> 本地模型（如 Ollama）</label>
+              <label class="ai-opt"><input type="radio" name="aisrc" value="local" checked /> 本地规则（演示版）</label>
+              <label class="ai-opt"><input type="radio" name="aisrc" value="byo" /> 自带 API Key（BYO）</label>
+              <label class="ai-opt"><input type="radio" name="aisrc" value="ollama" /> 本地模型（如 Ollama）</label>
+            </div>
+          </div>
+          <div class="set-row ai-cfg" id="aiCfgByo" hidden>
+            <div class="set-label"><b>API Key</b><span>你的密钥仅存于本工作区，不会外传</span></div>
+            <div class="token-box">
+              <input id="aiApiKey" class="set-input" type="password" placeholder="sk-..." />
+            </div>
+          </div>
+          <div class="set-row ai-cfg" id="aiCfgBase" hidden>
+            <div class="set-label"><b>接口地址 Base URL</b><span>OpenAI 兼容接口；Ollama 默认 http://localhost:11434/v1</span></div>
+            <div class="token-box">
+              <input id="aiBase" class="set-input" type="text" placeholder="https://api.openai.com/v1" />
+            </div>
+          </div>
+          <div class="set-row ai-cfg" id="aiCfgModel" hidden>
+            <div class="set-label"><b>模型名</b><span>如 gpt-4o-mini / llama3</span></div>
+            <div class="token-box">
+              <input id="aiModel" class="set-input" type="text" placeholder="gpt-4o-mini" />
             </div>
           </div>
           <div class="set-row">
             <div class="set-label"><b>失败回退</b><span>模型不可用时的兜底策略</span></div>
-            <div class="ai-fallback">模型不可用时，<b>自动回退本地规则</b>——保证念念离线也能跑（当前演示版即用本地规则模拟解析）。</div>
+            <div class="ai-fallback">模型不可用时，<b>自动回退本地规则</b>——保证念念离线也能跑（演示版即用本地规则模拟解析）。</div>
           </div>
-          <div class="ai-mask">✨ 占位形态 · 等核心闭环稳定后再接真实 AI</div>
+          <div class="set-row">
+            <div class="set-label"><b>AI 会在这些地方被用到</b><span>开启后，以下场景由模型接管</span></div>
+            <ul class="ai-usage">
+              <li><b>生成周报</b>：把本周流水揉成一段可直接发给上级的周报。</li>
+              <li><b>语义解析 & 对接人匹配</b>：记一笔时理解口语化指代，并自动匹配/归档对接人。</li>
+              <li><b>话术库生成话术</b>：根据模板提示词 + 对接人身份 + 事项上下文，生成自然话术，而非仅靠占位符替换。</li>
+            </ul>
+          </div>
+          <div class="set-row" style="justify-content:flex-end">
+            <button id="aiSave" class="btn btn-primary btn-sm">保存 AI 设置</button>
+          </div>
+        </div>
+
+        <!-- 工作区记录 -->
+        <div class="settings-card" style="margin-top:16px">
+          <div class="set-row">
+            <div class="set-label"><b>工作区记录</b><span>本实例下所有工作区（名称 / Token / 创建时间）</span></div>
+          </div>
+          <div class="token-box" style="align-items:stretch">
+            <table class="ws-table" id="wsTable">
+              <thead><tr><th>工作区名称</th><th>对应 Token</th><th>创建时间</th></tr></thead>
+              <tbody id="wsBody"><tr><td colspan="3" style="color:var(--ink-3)">加载中…</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </main>
@@ -777,6 +818,23 @@
       <div class="modal-actions">
           <button id="confirmNo" class="btn btn-ghost">取消</button>
           <button id="confirmYes" class="btn btn-danger">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 重新生成 Token 结果弹窗 -->
+  <div id="regenModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">已生成新工作区 Token</h3>
+      <p class="modal-sub">旧 Token 已失效，数据仍归属这份工作区。请妥善保存下面的记录：</p>
+      <div class="ws-record">
+        <div class="ws-field"><span class="ws-k">工作区名称</span><span class="ws-v" id="regenName">—</span></div>
+        <div class="ws-field"><span class="ws-k">对应 Token</span><code class="ws-v ws-token" id="regenToken">—</code></div>
+        <div class="ws-field"><span class="ws-k">创建时间</span><span class="ws-v" id="regenTime">—</span></div>
+      </div>
+      <div class="modal-actions">
+        <button id="regenCopy" class="btn btn-ghost">复制 Token</button>
+        <button id="regenClose" class="btn btn-primary">知道了</button>
       </div>
     </div>
   </div>

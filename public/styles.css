@@ -477,7 +477,7 @@ body {
 .tone-opt.is-on { border-color: var(--sage); background: var(--sage-soft); box-shadow: 0 0 0 1px var(--sage) inset; }
 .skin-picker { display: flex; gap: 10px; }
 .skin-opt { width: 52px; height: 52px; border-radius: 14px; border: 1px solid var(--line); background: var(--paper-2); font-size: 26px; cursor: pointer; transition: border-color .18s; }
-.skin-opt:hover:not(:disabled) { border-color: var(--sage); }
+.skin-opt:hover { border-color: var(--sage); }
 .skin-opt.is-on { border-color: var(--sage); background: var(--sage-soft); box-shadow: 0 0 0 1px var(--sage) inset; }
 .skin-opt.is-locked { opacity: .4; cursor: not-allowed; filter: grayscale(1); }
 .ai-source { display: flex; flex-direction: column; gap: 10px; }
