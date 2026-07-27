@@ -18,6 +18,7 @@ const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const { TEMPLATES } = require('./templates-seed');
 
 const DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_OWNER = 'demo-default';
@@ -139,6 +140,7 @@ const Auth = {
     const now = Date.now();
     db.prepare('INSERT INTO auth_tokens (token, label, created_at, last_used) VALUES (?,?,?,?)')
       .run(token, label || '我的工作区', now, now);
+    seedFor(token); // 新工作区立即预填示例数据，打开即有内容
     return { token, label: label || '我的工作区', created_at: now };
   },
   touch(token) {
@@ -258,25 +260,25 @@ function seedFor(owner) {
     ins.run(owner, at(0, 17, 0), 'weekly', '这一周，念念陪你记下了 9 件悬着的事，推进了 3 次，放下了 2 件。\n放下的：上线前评审会；合同盖章寄送\n推进过的：客户合同签署；法务审阅合同条款');
   }
 
+  const tplOwn = db.prepare('SELECT COUNT(*) c FROM templates WHERE owner=? AND builtin=0').get(owner).c;
+  if (tplOwn === 0) {
+    const now = Date.now();
+    const ins = db.prepare('INSERT INTO templates (owner, name, role, industry, tone, scene, purpose, body, scorpion, builtin, created_at) VALUES (?,?,?,?,?,?,?,?,?,0,?)');
+    TEMPLATES.forEach((t) => {
+      // t = [name, industry, tone, scene, purpose, body]
+      ins.run(owner, t[0], t[1], t[1], t[2], t[3], t[4], t[5], '', now);
+    });
+  }
+
   const petRow = db.prepare('SELECT owner FROM pet WHERE owner=?').get(owner);
   if (!petRow) {
     db.prepare("INSERT INTO pet (owner, intimacy, x, y, name, tone, skin) VALUES (?, 0, NULL, NULL, '念念', 'gentle', 'default')").run(owner);
   }
 }
 
-// 内置话术模板：全局唯一种一次（不分 owner，builtin=1 对所有工作区可见）
-(function seedBuiltinTemplates() {
-  const tplCount = db.prepare('SELECT COUNT(*) c FROM templates WHERE builtin=1').get().c;
-  if (tplCount === 0) {
-    const now = Date.now();
-    const { TEMPLATES } = require('./templates-seed');
-    const ins = db.prepare('INSERT INTO templates (owner, name, role, industry, tone, scene, purpose, body, scorpion, builtin, created_at) VALUES (?,?,?,?,?,?,?,?,?,1,?)');
-    TEMPLATES.forEach((t) => {
-      // t = [name, industry, tone, scene, purpose, body]
-      ins.run(DEFAULT_OWNER, t[0], t[1], t[1], t[2], t[3], t[4], t[5], '', now);
-    });
-  }
-})();
+// 清理旧版“全局内置”模板（builtin=1）：新版机制改为每个工作区各自持有一份示例话术库，
+// 避免部署到 Vercel 等冷启动环境下内置模板丢失、导致话术库为空，也避免与示例副本重复显示。
+try { db.prepare('DELETE FROM templates WHERE builtin=1').run(); } catch (e) {}
 seedFor(DEFAULT_OWNER);
 
 /* ============================================================

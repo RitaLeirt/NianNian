@@ -31,10 +31,11 @@
     async patch(u, body) { return (await fetch(u, { method: 'PATCH', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body || {}) })).json(); },
     async del(u) { return (await fetch(u, { headers: authHeaders(), method: 'DELETE' })).json(); },
   };
-  // 首次打开：本地没有 token 就自动签发一个专属工作区（新工作区一样会被种入示例数据，打开即有内容）
+  // 首次打开：默认进入演示工作区（demo-default），里面已预置完整的示例数据，打开即可体验；
+  // 如需独立工作区，可在“宠物/账号”面板重新生成专属 token。
   var tokenReady = (async function bootstrapToken() {
     if (getToken()) return;
-    try { var t = await API.post('/api/auth/token', { label: '我的工作区' }); if (t && t.token) setToken(t.token); } catch (e) {}
+    setToken('demo-default');
   })();
 
   /* ---------------- Toast ---------------- */
