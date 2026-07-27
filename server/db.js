@@ -22,7 +22,11 @@ const { TEMPLATES } = require('./templates-seed');
 
 const DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_OWNER = 'demo-default';
-const DATA_DIR = path.join(__dirname, '..', 'data');
+// 本地用项目内 data/；Vercel 等 Serverless 环境文件系统只读，只有 /tmp 可写，数据库须落到 /tmp。
+// 注：/tmp 在冷启动间不保证持久，每次重建库后会自动重新 seed 示例数据（见 seedFor）。
+const DATA_DIR = process.env.VERCEL
+  ? path.join('/tmp', 'niannian-data')
+  : path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_PATH = path.join(DATA_DIR, 'niannian.db');
 

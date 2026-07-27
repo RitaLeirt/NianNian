@@ -406,15 +406,21 @@ async function handleApi(req, res, url) {
   }
 }
 
-const server = http.createServer((req, res) => {
+// 统一的请求处理函数：既用于本地 http 服务器，也作为 Vercel Serverless Function 的 handler。
+const serverHandler = (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
   return serveStatic(req, res);
-});
+};
 
-server.listen(PORT, () => {
-  console.log(`\n  🧵 念念 NianNian 已启动`);
-  console.log(`  → http://localhost:${PORT}\n`);
-});
+// 本地直接运行（node server/server.js / npm start）时才监听端口；
+// 在 Vercel 上该文件被 api/index.js require，由 Serverless Function 托管，不在此监听端口。
+if (require.main === module) {
+  const server = http.createServer(serverHandler);
+  server.listen(PORT, () => {
+    console.log(`\n  🧵 念念 NianNian 已启动`);
+    console.log(`  → http://localhost:${PORT}\n`);
+  });
+}
 
-module.exports = { server };
+module.exports = serverHandler;

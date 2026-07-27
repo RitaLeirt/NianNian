@@ -2,9 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "framework": null,
-  "installCommand": "npm install",
-  "buildCommand": "echo 'no build step'",
-  "outputDirectory": ".",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ],
   "env": {
     "NODE_OPTIONS": "--experimental-sqlite"
   }
