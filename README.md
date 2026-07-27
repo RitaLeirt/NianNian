@@ -30,11 +30,11 @@
 
 ```bash
 cd niannian-app
-npm start          # 等价于 node server/server.js
+npm start          # 内部已带 --experimental-sqlite，可加载 node:sqlite
 # 打开 http://localhost:8787
 ```
 
-自定义端口：`PORT=9000 node server/server.js`
+自定义端口：`PORT=9000 npm start`
 
 > 📐 **PRD 原型图文档**：启动后访问 `http://localhost:8787/docs/prototype.html`，
 > 内含站点结构、两页线框图、核心机制、数据模型、API 契约与设计系统。
