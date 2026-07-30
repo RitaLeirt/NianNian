@@ -317,7 +317,9 @@ async function handleApi(req, res, url) {
           tone: url.searchParams.get('tone') || '',
           scene: url.searchParams.get('scene') || '',
           purpose: url.searchParams.get('purpose') || '',
+          tag: url.searchParams.get('tag') || '',
           kw: url.searchParams.get('kw') || '',
+          sort: url.searchParams.get('sort') || '',
         };
         return sendJSON(res, 200, Templates.list(owner, q));
       }

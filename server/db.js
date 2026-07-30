@@ -198,6 +198,7 @@ async function callAI(owner, system, user) {
 /* 兼容老库：缺列则补上 */
 const tplCols = db.prepare("PRAGMA table_info(templates)").all().map(c => c.name);
 if (!tplCols.includes('scorpion')) db.exec("ALTER TABLE templates ADD COLUMN scorpion TEXT DEFAULT ''");
+if (!tplCols.includes('tags')) db.exec("ALTER TABLE templates ADD COLUMN tags TEXT DEFAULT ''");
 
 /* ============================================================
  * Auth：Token 签发 / 校验 / 工作区隔离
@@ -694,17 +695,25 @@ const Journal = {
  * ============================================================ */
 const Templates = {
   list(owner, q) {
-    let rows = db.prepare('SELECT * FROM templates WHERE builtin=1 OR owner=? ORDER BY builtin DESC, created_at DESC').all(owner);
+    let rows = db.prepare('SELECT * FROM templates WHERE builtin=1 OR owner=?').all(owner);
     if (q) {
       const f = q;
       if (f.industry) rows = rows.filter((t) => t.industry === f.industry);
       if (f.tone) rows = rows.filter((t) => t.tone === f.tone);
       if (f.scene) rows = rows.filter((t) => t.scene === f.scene);
       if (f.purpose) rows = rows.filter((t) => t.purpose === f.purpose);
+      if (f.tag) rows = rows.filter((t) => (t.tags || '').split(',').map((x) => x.trim()).filter(Boolean).indexOf(f.tag) >= 0);
       if (f.kw) {
         const kw = f.kw.toLowerCase();
-        rows = rows.filter((t) => (t.name + t.body + t.industry + t.tone + t.scene + t.purpose).toLowerCase().indexOf(kw) >= 0);
+        rows = rows.filter((t) => (t.name + t.body + t.industry + t.tone + t.scene + t.purpose + (t.tags || '')).toLowerCase().indexOf(kw) >= 0);
       }
+    }
+    // 排序：alpha=按话术名首字母（拼音）升序；默认 time=按添加顺序倒序（后加的在前）
+    const sort = q && q.sort;
+    if (sort === 'alpha') {
+      rows.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hans-CN'));
+    } else {
+      rows.sort((a, b) => (b.created_at - a.created_at) || (b.id - a.id));
     }
     return rows;
   },
@@ -716,11 +725,17 @@ const Templates = {
       rows.forEach((t) => { const v = t[key]; if (v) m[v] = (m[v] || 0) + 1; });
       return Object.keys(m).map((k) => ({ value: k, count: m[k] }));
     };
-    return { industry: dim('industry'), tone: dim('tone'), scene: dim('scene'), purpose: dim('purpose'), total: rows.length };
+    // 标签维度：tags 为逗号分隔，拆开统计
+    const tagMap = {};
+    rows.forEach((t) => {
+      (t.tags || '').split(',').map((x) => x.trim()).filter(Boolean).forEach((tg) => { tagMap[tg] = (tagMap[tg] || 0) + 1; });
+    });
+    const tags = Object.keys(tagMap).map((k) => ({ value: k, count: tagMap[k] }));
+    return { industry: dim('industry'), tone: dim('tone'), scene: dim('scene'), purpose: dim('purpose'), tags, total: rows.length };
   },
   add(owner, data) {
-    const r = db.prepare('INSERT INTO templates (owner, name, role, industry, tone, scene, purpose, body, scorpion, builtin, created_at) VALUES (?,?,?,?,?,?,?,?,?,0,?)')
-      .run(owner, data.name || '未命名模板', data.industry || data.role || '', data.industry || '', data.tone || '', data.scene || '', data.purpose || '', data.body || '', data.scorpion || '', Date.now());
+    const r = db.prepare('INSERT INTO templates (owner, name, role, industry, tone, scene, purpose, body, scorpion, tags, builtin, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,0,?)')
+      .run(owner, data.name || '未命名模板', data.industry || data.role || '', data.industry || '', data.tone || '', data.scene || '', data.purpose || '', data.body || '', data.scorpion || '', data.tags || '', Date.now());
     return db.prepare('SELECT * FROM templates WHERE id=?').get(r.lastInsertRowid);
   },
   remove(owner, id) { db.prepare('DELETE FROM templates WHERE id=? AND owner=? AND builtin=0').run(id, owner); },
@@ -728,8 +743,8 @@ const Templates = {
     const cur = db.prepare('SELECT * FROM templates WHERE id=? AND owner=? AND builtin=0').get(id, owner);
     if (!cur) return null;
     const m = Object.assign({}, cur, data);
-    db.prepare('UPDATE templates SET name=?, role=?, industry=?, tone=?, scene=?, purpose=?, body=?, scorpion=? WHERE id=?')
-      .run(m.name, m.industry || m.role, m.industry, m.tone, m.scene, m.purpose, m.body, m.scorpion || '', id);
+    db.prepare('UPDATE templates SET name=?, role=?, industry=?, tone=?, scene=?, purpose=?, body=?, scorpion=?, tags=? WHERE id=?')
+      .run(m.name, m.industry || m.role, m.industry, m.tone, m.scene, m.purpose, m.body, m.scorpion || '', m.tags || '', id);
     return db.prepare('SELECT * FROM templates WHERE id=?').get(id);
   },
   // 针对某事项生成话术：模板占位替换（话术引擎·模板版）

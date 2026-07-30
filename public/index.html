@@ -448,6 +448,13 @@
               <input id="tplSearch" type="search" placeholder="搜话术名、正文或标签…" aria-label="搜索话术" />
               <button id="tplReset" class="tpl-reset" hidden>清空筛选</button>
             </div>
+            <label class="tpl-sort" title="排序方式">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h13M3 12h9M3 18h5M18 9l3-3 3 3M21 6v12"/></svg>
+              <select id="tplSort">
+                <option value="time">按添加时间（新→旧）</option>
+                <option value="alpha">按首字母</option>
+              </select>
+            </label>
             <button id="tplNewBtn" class="btn btn-sage col-add-btn">+ 新建话术</button>
           </div>
           <div id="tplFilters" class="tpl-filters"></div>
@@ -850,8 +857,17 @@
         <label>话术正文
           <textarea id="tplBody" rows="3" required placeholder="可用 {对方} {在等} {事} 占位，念念套用时自动替换"></textarea>
         </label>
-        <label>天蝎提示词 <span class="k-optional">给 AI 看的更全的上下文</span>
-          <textarea id="tplScorpion" rows="3" placeholder="把背景/语境/对方特征/你的目的/语气/特殊约束等写进这里，AI 生成时会参考这段"></textarea>
+        <label>提示词内容 <span class="k-optional">给 AI 的上下文——生成话术时会参考这段</span>
+          <textarea id="tplScorpion" rows="4" placeholder="例：你是一位资深销售，正在跟进一位看重结论、时间紧张的甲方…"></textarea>
+        </label>
+        <label>标签 <span class="k-optional">选一些标签，保存后会显示在卡片上、并可在筛选里按标签找</span>
+          <div class="tag-picker" id="tplTagPicker">
+            <div class="tag-picker-chosen" id="tplTagChosen"></div>
+            <div class="tag-picker-input-row">
+              <input id="tplTagInput" type="text" maxlength="12" placeholder="输入标签后回车，或点下方推荐标签" />
+            </div>
+            <div class="tag-picker-suggest" id="tplTagSuggest"></div>
+          </div>
         </label>
         <div class="modal-actions">
           <button type="button" id="tplClose" class="btn btn-ghost">取消</button>

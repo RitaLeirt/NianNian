@@ -337,11 +337,11 @@ body {
 
 /* ============ 本周分组 / 列表视图 ============ */
 .board-grid.grouped { display: block; }
-.board-col { margin-bottom: 26px; }
-.board-col-head { font-family: var(--font-display); font-size: 15px; color: var(--ink-soft); margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.board-col { margin-bottom: 26px; display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch; }
+.board-col-head { flex-basis: 100%; font-family: var(--font-display); font-size: 15px; color: var(--ink-soft); margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
 .grp-ico { width: 17px; height: 17px; flex: none; fill: none; stroke: var(--sage); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .board-col-head em { font-style: normal; font-family: var(--font-mono); font-size: 12px; background: var(--sage-soft); color: var(--sage-deep); padding: 1px 9px; border-radius: 12px; }
-.board-col .suspense-card { display: inline-flex; width: 300px; vertical-align: top; margin: 0 14px 14px 0; }
+.board-col .suspense-card { width: 300px; display: flex; vertical-align: top; margin: 0; }
 
 .board-list { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .lst-head, .lst-row { display: grid; grid-template-columns: 40px 1fr 110px 80px 90px 70px; align-items: center; gap: 8px; padding: 10px 14px; }
@@ -555,7 +555,7 @@ body {
   background: var(--paper); border: 1px solid var(--line);
   border-radius: var(--radius-m); padding: 16px 18px 14px;
   box-shadow: var(--shadow-card); display: flex; flex-direction: column;
-  position: relative; min-height: 220px; cursor: pointer;
+  position: relative; min-height: 252px; height: 100%; cursor: pointer;
   transition: transform .22s cubic-bezier(0.16,1,0.3,1), box-shadow .22s cubic-bezier(0.16,1,0.3,1);
 }
 .suspense-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-pop); }
@@ -604,20 +604,20 @@ body {
 .tpl-search-grow { flex: 1; margin-bottom: 0; }
 .tpl-toolbar .col-add-btn { flex: none; }
 
-.tpl-filters { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; padding: 6px 0; }
-.tpl-frow { display: flex; align-items: flex-start; gap: 12px; padding: 5px 0; }
+.tpl-filters { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; padding: 4px 0; }
+.tpl-frow { display: flex; align-items: flex-start; gap: 12px; padding: 4px 0; }
 .tpl-frow + .tpl-frow { border-top: 1px solid rgba(231,225,212,.6); }
-.tpl-frow-label { font-size: 12px; color: var(--ink-faint); width: 74px; flex: none; display: inline-flex; align-items: center; gap: 6px; padding-top: 5px; }
+.tpl-frow-label { font-size: 12px; color: var(--ink-faint); width: 74px; flex: none; display: inline-flex; align-items: center; gap: 6px; padding-top: 4px; }
 .dim-ico { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
 .tpl-frow-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
-/* 分类筛选 chip：统一克制风格——中性描边、8px 圆角、统一高度，选中态统一 sage，不再多色 */
+/* 分类筛选 chip：统一克制风格——中性描边、8px 圆角、更窄的高度，选中态统一 sage */
 .tpl-chip {
   border: 1px solid var(--line); background: var(--paper); cursor: pointer;
-  font-family: var(--font-body); font-size: 12.5px; color: var(--ink-soft);
-  height: 30px; padding: 0 12px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-body); font-size: 12px; color: var(--ink-soft);
+  height: 24px; padding: 0 10px; border-radius: 7px; display: inline-flex; align-items: center; gap: 5px;
   transition: border-color .16s cubic-bezier(0.16,1,0.3,1), background .16s cubic-bezier(0.16,1,0.3,1), color .16s cubic-bezier(0.16,1,0.3,1);
 }
-.tpl-chip em { font-style: normal; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-faint); }
+.tpl-chip em { font-style: normal; font-family: var(--font-mono); font-size: 10px; color: var(--ink-faint); }
 .tpl-chip:hover { border-color: var(--sage); color: var(--ink); }
 /* 选中态：统一 sage 描边 + 浅 sage 底 + 深 sage 字，四类完全一致，克制不花哨 */
 .tpl-chip.is-on { background: var(--sage-soft); border-color: var(--sage); color: var(--sage-deep); font-weight: 600; }
@@ -681,6 +681,28 @@ body {
 .tg-tone i { width: 7px; height: 7px; border-radius: 50%; }
 .tg-scene { color: #4A5E88; padding: 1px 9px; border-radius: 6px; border: 1px solid #B9C4DC; background: transparent; }                                     /* 描边标签 */
 .tg-purpose { color: #9B6C1E; padding: 2px 10px; border-radius: 20px; background: #F8EEDD; font-family: var(--font-mono); font-size: 11px; }               /* 箭头胶囊 */
+.tg-custom { color: var(--ink-soft); padding: 2px 9px; border-radius: 6px; border: 1px dashed var(--line); background: var(--paper-2); font-family: var(--font-body); font-size: 11px; }
+
+/* 话术库工具栏：排序选择器（夹在搜索框与新建之间） */
+.tpl-sort { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 42px; padding: 0 12px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-l); color: var(--ink-faint); }
+.tpl-sort select { border: none; background: transparent; outline: none; font-family: var(--font-body); font-size: 13px; color: var(--ink); cursor: pointer; }
+.tpl-sort svg { flex: none; }
+
+/* 编辑话术模板弹窗：标签选择器 */
+.tag-picker { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--paper-2); }
+.tag-picker-chosen { display: flex; flex-wrap: wrap; gap: 6px; min-height: 22px; }
+.tag-empty { font-size: 12px; color: var(--ink-faint); }
+.tag-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--sage-deep); background: var(--sage-soft); border: 1px solid var(--sage); border-radius: 8px; padding: 3px 6px 3px 9px; }
+.tag-chip button { border: none; background: transparent; color: var(--sage-deep); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; opacity: .7; }
+.tag-chip button:hover { opacity: 1; }
+.tag-picker-input-row input { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-family: var(--font-body); font-size: 13px; color: var(--ink); background: var(--paper); outline: none; }
+.tag-picker-input-row input:focus { border-color: var(--sage); }
+.tag-picker-suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-suggest-chip { border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); cursor: pointer; font-family: var(--font-body); font-size: 12px; padding: 3px 10px; border-radius: 8px; transition: border-color .16s cubic-bezier(0.16,1,0.3,1), color .16s cubic-bezier(0.16,1,0.3,1), background .16s cubic-bezier(0.16,1,0.3,1); }
+.tag-suggest-chip:hover { border-color: var(--sage); color: var(--sage-deep); background: var(--sage-soft); }
+
+/* 卡片提示词块：实际填写的提示词内容 */
+.tpl-prompt-text { margin: 8px 0 6px; font-size: 12.5px; line-height: 1.6; color: var(--ink-soft); background: var(--paper); border-left: 2px solid var(--sage); padding: 8px 10px; border-radius: 0 8px 8px 0; }
 
 /* ============ 日记本 ============ */
 .timeline { position: relative; padding-left: 22px; }

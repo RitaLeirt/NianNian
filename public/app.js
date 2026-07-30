@@ -407,9 +407,10 @@
     { key: 'tone', label: '语气', icon: SVG.tone },
     { key: 'scene', label: '场景', icon: SVG.pin },
     { key: 'purpose', label: '目的 / 方式', icon: SVG.target },
+    { key: 'tags', label: '标签', icon: SVG.tag },
   ];
   var TONE_DOT = { '温和': '#8AA88C', '正式': '#6A7EA8', '干练': '#C88A3A', '热络': '#C15B3A', '诚恳': '#7A9A8C', '俏皮': '#B57BB0' };
-  var tplState = { industry: '', tone: '', scene: '', purpose: '', kw: '' };
+  var tplState = { industry: '', tone: '', scene: '', purpose: '', tag: '', kw: '', sort: 'time' };
   var tplFacets = null;
 
   function tplTagsHtml(t) {
@@ -418,6 +419,10 @@
     if (t.tone) out += '<span class="tg tg-tone"><i style="background:' + (TONE_DOT[t.tone] || '#999') + '"></i>' + esc(t.tone) + '</span>';
     if (t.scene) out += '<span class="tg tg-scene">' + esc(t.scene) + '</span>';
     if (t.purpose) out += '<span class="tg tg-purpose">→ ' + esc(t.purpose) + '</span>';
+    // 用户自定义标签：回显到卡片上
+    (t.tags || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (tg) {
+      out += '<span class="tg tg-custom"># ' + esc(tg) + '</span>';
+    });
     return '<div class="tpl-tags">' + out + '</div>';
   }
   // 生成一份通用示例效果：把这条话术/提示词当模板，用一组示例信息套用后大概是什么效果
@@ -441,7 +446,9 @@
       ['采用语气',  t.tone || '诚恳、不绕弯'],
       ['用于场景',  t.scene || '日常跟进'],
     ];
-    return '<div class="tpl-prompt"><div class="tpl-prompt-hd"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3z"/><path d="M14 4v5h5M8 13h8M8 17h5"/></svg><span>提示词</span><em>给 AI 看的上下文</em></div><ul>' +
+    return '<div class="tpl-prompt"><div class="tpl-prompt-hd"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3z"/><path d="M14 4v5h5M8 13h8M8 17h5"/></svg><span>提示词</span><em>给 AI 看的上下文</em></div>' +
+      (t.scorpion ? '<p class="tpl-prompt-text">' + esc(t.scorpion) + '</p>' : '') +
+      '<ul>' +
       rows.map(function (r) { return '<li><b>' + esc(r[0]) + '</b><span>' + esc(r[1]) + '</span></li>'; }).join('') +
       '<li class="tpl-prompt-role"><b>你的角色</b><span>' + esc(role) + '，需要用上面的语气、场景、目的，生成一段合适的话术。</span></li>' +
       '</ul></div>';
@@ -453,15 +460,16 @@
     TPL_DIMS.forEach(function (dim) {
       var vals = tplFacets[dim.key] || [];
       if (!vals.length) return;
+      // tags 维度用 tplState.tag 作为筛选键，其它维度用自身 key
+      var stateKey = dim.key === 'tags' ? 'tag' : dim.key;
       var row = document.createElement('div');
       row.className = 'tpl-frow';
       var chips = '<span class="tpl-frow-label">' + dim.icon + dim.label + '</span>';
       chips += '<span class="tpl-frow-chips">';
-      chips += '<button class="tpl-chip' + (tplState[dim.key] ? '' : ' is-on') + '" data-dim="' + dim.key + '" data-val="">全部</button>';
+      chips += '<button class="tpl-chip' + (tplState[stateKey] ? '' : ' is-on') + '" data-dim="' + stateKey + '" data-val="">全部</button>';
       vals.sort(function (a, b) { return b.count - a.count; }).forEach(function (v) {
-        var on = tplState[dim.key] === v.value;
-        // 统一样式：纯文字 + 计数徽标，去掉彩色圆点与箭头前缀，选中态由 CSS 统一
-        chips += '<button class="tpl-chip' + (on ? ' is-on' : '') + '" data-dim="' + dim.key + '" data-val="' + esc(v.value) + '">' +
+        var on = tplState[stateKey] === v.value;
+        chips += '<button class="tpl-chip' + (on ? ' is-on' : '') + '" data-dim="' + stateKey + '" data-val="' + esc(v.value) + '">' +
           esc(v.value) + '<em>' + v.count + '</em></button>';
       });
       chips += '</span>';
@@ -480,9 +488,9 @@
     if (!tplFacets) tplFacets = await API.get('/api/templates/facets');
     renderFilters();
     var qs = [];
-    ['industry', 'tone', 'scene', 'purpose', 'kw'].forEach(function (k) { if (tplState[k]) qs.push(k + '=' + encodeURIComponent(tplState[k])); });
+    ['industry', 'tone', 'scene', 'purpose', 'tag', 'kw', 'sort'].forEach(function (k) { if (tplState[k]) qs.push((k === 'tag' ? 'tag' : k) + '=' + encodeURIComponent(tplState[k])); });
     var list = await API.get('/api/templates' + (qs.length ? '?' + qs.join('&') : ''));
-    var anyFilter = tplState.industry || tplState.tone || tplState.scene || tplState.purpose || tplState.kw;
+    var anyFilter = tplState.industry || tplState.tone || tplState.scene || tplState.purpose || tplState.tag || tplState.kw;
     $('#tplReset').hidden = !anyFilter;
     $('#tplCount').textContent = '共 ' + list.length + ' 条' + (anyFilter ? ' · 已筛选' : '');
     // 提示词库数字角标已移除（任务 11：沟通对象子标签不再带数字）
@@ -559,9 +567,51 @@
     tplSearchTimer = setTimeout(function () { tplState.kw = v; loadTemplates(); }, 250);
   });
   $('#tplReset').addEventListener('click', function () {
-    tplState = { industry: '', tone: '', scene: '', purpose: '', kw: '' };
+    tplState = { industry: '', tone: '', scene: '', purpose: '', tag: '', kw: '', sort: tplState.sort || 'time' };
     $('#tplSearch').value = ''; loadTemplates();
   });
+  // 排序方式：时间倒序（默认）/ 首字母
+  var tplSortSel = $('#tplSort');
+  if (tplSortSel) tplSortSel.addEventListener('change', function () { tplState.sort = this.value; loadTemplates(); });
+
+  // 新建时预填的提示词 example（按行业/场景给一段像样的上下文，用户可直接改）
+  var SCORPION_EXAMPLE = '你是一位经验丰富的职场沟通高手。现在要和 {对方} 就「{事}」进行沟通，目前正{在等}。' +
+    '对方看重效率、不喜欢空话；请用温和而专业的语气，先给结论再给理由，帮我推进这件事往前一步。';
+  // 标签 picker 状态
+  var tplChosenTags = [];
+  function renderTplTagChosen() {
+    var box = $('#tplTagChosen');
+    if (!box) return;
+    box.innerHTML = tplChosenTags.map(function (tg, i) {
+      return '<span class="tag-chip"># ' + esc(tg) + '<button type="button" data-i="' + i + '" aria-label="移除">×</button></span>';
+    }).join('') || '<span class="tag-empty">还没选标签</span>';
+    $$('#tplTagChosen [data-i]').forEach(function (b) {
+      b.addEventListener('click', function () { tplChosenTags.splice(+b.getAttribute('data-i'), 1); renderTplTagChosen(); });
+    });
+  }
+  function renderTplTagSuggest() {
+    var box = $('#tplTagSuggest'); if (!box) return;
+    var pool = ((tplFacets && tplFacets.tags) || []).map(function (x) { return x.value; });
+    var extra = ['重点客户', '长期跟进', '高优先级', '待确认', '模板首选'];
+    var all = pool.concat(extra).filter(function (v, i, a) { return a.indexOf(v) === i && tplChosenTags.indexOf(v) < 0; });
+    box.innerHTML = all.slice(0, 12).map(function (tg) {
+      return '<button type="button" class="tag-suggest-chip" data-tg="' + esc(tg) + '"># ' + esc(tg) + '</button>';
+    }).join('');
+    $$('#tplTagSuggest [data-tg]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var tg = b.getAttribute('data-tg');
+        if (tplChosenTags.indexOf(tg) < 0) tplChosenTags.push(tg);
+        renderTplTagChosen(); renderTplTagSuggest();
+      });
+    });
+  }
+  function addTplTagFromInput() {
+    var inp = $('#tplTagInput'); if (!inp) return;
+    var v = inp.value.trim().replace(/[,，]/g, '');
+    if (v && tplChosenTags.indexOf(v) < 0) { tplChosenTags.push(v); renderTplTagChosen(); renderTplTagSuggest(); }
+    inp.value = '';
+  }
+
   // 新建 / 编辑 模态
   var tplModal = $('#tplModal'), tplEditId = null;
   function openTplModal(t) {
@@ -573,18 +623,29 @@
     $('#tplScene').value = t ? (t.scene || '跟进') : '跟进';
     $('#tplPurpose').value = t ? (t.purpose || '等回复') : '等回复';
     $('#tplBody').value = t ? t.body : '';
-    $('#tplScorpion').value = t ? (t.scorpion || '') : '';
+    // 提示词内容：编辑时回填；新建时预填 example，用户可直接改
+    $('#tplScorpion').value = t ? (t.scorpion || '') : SCORPION_EXAMPLE;
+    // 标签：编辑时回填已有标签，新建时清空
+    tplChosenTags = t && t.tags ? t.tags.split(',').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+    renderTplTagChosen(); renderTplTagSuggest();
+    $('#tplTagInput').value = '';
     tplModal.hidden = false; $('#tplName').focus();
   }
   $('#tplNewBtn').addEventListener('click', function () { openTplModal(null); });
   $('#tplClose').addEventListener('click', function () { tplModal.hidden = true; });
   tplModal.addEventListener('click', function (e) { if (e.target === tplModal) tplModal.hidden = true; });
+  // 标签输入：回车 / 逗号 添加
+  $('#tplTagInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ',' || e.key === '，') { e.preventDefault(); addTplTagFromInput(); }
+  });
+  $('#tplTagInput').addEventListener('blur', addTplTagFromInput);
   $('#tplForm').addEventListener('submit', async function (e) {
     e.preventDefault();
+    addTplTagFromInput();
     var body = {
       name: $('#tplName').value.trim(), industry: $('#tplIndustry').value, tone: $('#tplTone').value,
       scene: $('#tplScene').value, purpose: $('#tplPurpose').value, body: $('#tplBody').value.trim(),
-      scorpion: $('#tplScorpion').value.trim(),
+      scorpion: $('#tplScorpion').value.trim(), tags: tplChosenTags.join(','),
     };
     if (!body.name || !body.body) return;
     try {
