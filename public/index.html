@@ -535,8 +535,8 @@
             </div>
           </div>
           <div class="set-row">
-            <div class="set-label"><b>重新生成</b><span>旧 token 失效、数据仍归属该工作区；用于换一台设备或重置分享</span></div>
-            <button id="tokenRegen" class="btn btn-ghost btn-sm">重新生成 Token</button>
+            <div class="set-label"><b>重新生成工作区</b><span>新建一个全新的空工作区并切过去；当前工作区（token、名称、数据）会完整保留，可随时从下方记录切回</span></div>
+            <button id="tokenRegen" class="btn btn-ghost btn-sm">重新生成工作区</button>
           </div>
         </div>
 
@@ -588,12 +588,12 @@
         <!-- 工作区记录 -->
         <div class="settings-card" style="margin-top:16px">
           <div class="set-row">
-            <div class="set-label"><b>工作区记录</b><span>本实例下所有工作区（名称 / Token / 创建时间）</span></div>
+            <div class="set-label"><b>工作区记录</b><span>本实例下所有工作区。复制 Token 可在别处切回，「切到此工作区」直接查看该份数据</span></div>
           </div>
           <div class="token-box" style="align-items:stretch">
             <table class="ws-table" id="wsTable">
-              <thead><tr><th>工作区名称</th><th>对应 Token</th><th>创建时间</th></tr></thead>
-              <tbody id="wsBody"><tr><td colspan="3" style="color:var(--ink-3)">加载中…</td></tr></tbody>
+              <thead><tr><th>工作区名称</th><th>对应 Token</th><th>创建时间</th><th class="ws-op-col">操作</th></tr></thead>
+              <tbody id="wsBody"><tr><td colspan="4" style="color:var(--ink-faint)">加载中…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -678,9 +678,11 @@
   <div id="schModal" class="modal" hidden>
     <div class="modal-card modal-card-lg">
       <h3 id="schModalTitle">添加定时任务</h3>
-      <p class="sch-hint">到点念念会按"生成的事"模板建一条悬念。生成后怎么盯、什么时候提醒，跟你手动记的事完全走同一套规则——不会因为来自定时任务就瞎催。</p>
+      <p class="sch-hint">到点后，念念会照下面这句话在「事项看板」建一条待办，并提醒你。之后怎么盯、什么时候催，跟你手动记的事走同一套规则——不会因为来自定时任务就瞎催。</p>
       <form id="schForm" class="edit-form" autocomplete="off">
-        <label>任务名称 <input id="schName" type="text" required maxlength="40" placeholder="如：周五整理周报" /></label>
+        <label>要念念提醒你做的事 <span class="k-optional">这句话会直接成为看板待办标题，可用 {日期}</span>
+          <input id="schName" type="text" required maxlength="40" placeholder="如：整理本周周报发给上级" />
+        </label>
         <div class="edit-row">
           <label>执行频率
             <select id="schFreq">
@@ -692,9 +694,6 @@
           </label>
           <label>执行时间 <input id="schTime" type="time" value="18:00" /></label>
         </div>
-        <label>到点生成的事 <span class="k-optional">标题模板，支持 {周报}{日期}</span>
-          <input id="schTemplate" type="text" maxlength="60" placeholder="如：整理本周周报" />
-        </label>
         <label class="switch-row">
           <span class="switch-label">创建后立即启用</span>
           <span class="ios-switch"><input id="schEnabled" type="checkbox" checked /><span class="ios-knob" aria-hidden="true"></span></span>
@@ -727,20 +726,21 @@
         <label>人设（可选，想让话术更准才填）
           <input id="colPersona" type="text" maxlength="60" placeholder="如：喜欢先看结论、是个急性子" />
         </label>
+
+        <!-- 已添加话术管理（仅编辑已有对接人时显示）：查看 / 新增 / 删除 / 修改 -->
+        <div id="colScriptsBlock" class="col-scripts-block" hidden>
+          <div class="col-scripts-head">
+            <h4>与 ta 对接的话术</h4>
+            <button type="button" id="colAddScript" class="btn btn-sage btn-sm">+ 从话术库挑一句</button>
+          </div>
+          <div id="colScriptsList" class="cd-scripts"></div>
+        </div>
+
         <div class="modal-actions">
           <button type="button" id="colClose" class="btn btn-ghost">取消</button>
           <button type="submit" class="btn btn-primary">保存</button>
         </div>
       </form>
-
-      <!-- 已添加话术管理（仅编辑已有对接人时显示）：查看 / 新增 / 删除 / 修改 -->
-      <div id="colScriptsBlock" class="col-scripts-block" hidden>
-        <div class="col-scripts-head">
-          <h4>与 ta 对接的话术</h4>
-          <button id="colAddScript" class="btn btn-sage btn-sm">+ 从话术库挑一句</button>
-        </div>
-        <div id="colScriptsList" class="cd-scripts"></div>
-      </div>
     </div>
   </div>
 

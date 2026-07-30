@@ -849,8 +849,14 @@ const Schedules = {
     const now = Date.now();
     // v2 简化：保留 name/cron_label/enabled/next_run；用 desc 字段存"生成的事"模板（title），由到点任务生成
     const r = db.prepare('INSERT INTO schedules (owner, name, desc, cron_label, enabled, run_count, next_run, created_at) VALUES (?,?,?,?,?,0,?,?)')
-      .run(owner, data.name || '未命名任务', data.template || data.desc || '', data.cron_label || '', data.enabled === false ? 0 : 1, data.next_run || null, now);
-    return Schedules.get(owner, r.lastInsertRowid);
+      .run(owner, data.name || '未命名任务', data.template || data.desc || data.name || '', data.cron_label || '', data.enabled === false ? 0 : 1, data.next_run || null, now);
+    const created = Schedules.get(owner, r.lastInsertRowid);
+    // 新增即联动：若任务已启用，立即在看板生成一条对应事项，用户马上能看到「定时任务→看板」的闭环
+    let seededItem = null;
+    if (created && created.enabled) {
+      seededItem = Schedules.run(owner, created.id, { keepNextRun: true });
+    }
+    return Object.assign({}, created, { seededItem });
   },
   update(owner, id, data) {
     const cur = db.prepare('SELECT * FROM schedules WHERE id=? AND owner=?').get(id, owner);
@@ -871,7 +877,8 @@ const Schedules = {
   // 执行一次定时任务：根据任务的 desc/template 生成一条悬念事项写入看板，并记录日记。
   // 测试按钮和真实调度都走这个方法，保证"定时任务→事项看板"联动。
   // dedupe：同一天内同一任务已生成过同名事项则不重复生成（避免看板堆叠）。
-  run(owner, id) {
+  run(owner, id, opts) {
+    opts = opts || {};
     const s = db.prepare('SELECT * FROM schedules WHERE id=? AND owner=?').get(id, owner);
     if (!s || !s.enabled) return null;
     const template = s.desc || s.name || '定时提醒';
@@ -884,7 +891,7 @@ const Schedules = {
     const existed = db.prepare('SELECT id FROM items WHERE owner=? AND title=? AND done=0 AND created_at>=?')
       .get(owner, title, dayStart);
     if (existed) {
-      db.prepare('UPDATE schedules SET next_run=? WHERE id=? AND owner=?').run(Schedules.nextRunFrom(s), id, owner);
+      if (!opts.keepNextRun) db.prepare('UPDATE schedules SET next_run=? WHERE id=? AND owner=?').run(Schedules.nextRunFrom(s), id, owner);
       return db.prepare('SELECT * FROM items WHERE id=?').get(existed.id);
     }
     const it = Items.create(owner, {
@@ -898,8 +905,13 @@ const Schedules = {
       priority: 'normal',
     });
     Journal.add(owner, 'note', '定时任务「' + s.name + '」自动生成：' + it.title);
-    db.prepare('UPDATE schedules SET run_count=run_count+1, next_run=? WHERE id=? AND owner=?')
-      .run(Schedules.nextRunFrom(s), id, owner);
+    // 新增时的即时生成（keepNextRun）只累加执行次数、保留用户设定的下次执行时间；真实到点触发才重排 next_run
+    if (opts.keepNextRun) {
+      db.prepare('UPDATE schedules SET run_count=run_count+1 WHERE id=? AND owner=?').run(id, owner);
+    } else {
+      db.prepare('UPDATE schedules SET run_count=run_count+1, next_run=? WHERE id=? AND owner=?')
+        .run(Schedules.nextRunFrom(s), id, owner);
+    }
     return it;
   },
   // 依据 cron_label 推算下一次执行时间（尽力而为：解析时刻 + 频率）

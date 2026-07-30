@@ -456,13 +456,15 @@
       var row = document.createElement('div');
       row.className = 'tpl-frow';
       var chips = '<span class="tpl-frow-label">' + dim.icon + dim.label + '</span>';
-      chips += '<button class="tpl-chip tg-' + dim.key + (tplState[dim.key] ? '' : ' is-on') + '" data-dim="' + dim.key + '" data-val="">全部</button>';
+      chips += '<span class="tpl-frow-chips">';
+      chips += '<button class="tpl-chip' + (tplState[dim.key] ? '' : ' is-on') + '" data-dim="' + dim.key + '" data-val="">全部</button>';
       vals.sort(function (a, b) { return b.count - a.count; }).forEach(function (v) {
         var on = tplState[dim.key] === v.value;
-        chips += '<button class="tpl-chip tg-' + dim.key + (on ? ' is-on' : '') + '" data-dim="' + dim.key + '" data-val="' + esc(v.value) + '">' +
-          (dim.key === 'tone' ? '<i style="background:' + (TONE_DOT[v.value] || '#999') + '"></i>' : '') +
-          (dim.key === 'purpose' ? '→ ' : '') + esc(v.value) + ' <em>' + v.count + '</em></button>';
+        // 统一样式：纯文字 + 计数徽标，去掉彩色圆点与箭头前缀，选中态由 CSS 统一
+        chips += '<button class="tpl-chip' + (on ? ' is-on' : '') + '" data-dim="' + dim.key + '" data-val="' + esc(v.value) + '">' +
+          esc(v.value) + '<em>' + v.count + '</em></button>';
       });
+      chips += '</span>';
       row.innerHTML = chips;
       box.appendChild(row);
     });
@@ -870,8 +872,7 @@
   function openSchModal(s) {
     schState.editId = s ? s.id : null;
     $('#schModalTitle').textContent = s ? '编辑定时任务' : '添加定时任务';
-    $('#schName').value = s ? s.name : '';
-    $('#schTemplate').value = s ? (s.template || s.name) : '';
+    $('#schName').value = s ? (s.desc || s.name) : '';
     $('#schEnabled').checked = s ? s.enabled : true;
     // 从 cron_label 反解频率/时间（尽力而为）
     var freq = 'workday', time = '18:00';
@@ -891,15 +892,21 @@
     e.preventDefault();
     var name = $('#schName').value.trim(); if (!name) return;
     var freq = $('#schFreq').value, time = $('#schTime').value || '18:00';
-    var template = $('#schTemplate').value.trim() || s.name;
+    // 「要念念提醒你做的事」这句话同时作为任务名与到点生成的看板事项标题
     var cron_label = FREQ_LABEL[freq] + ' ' + time + ' 执行';
     // 计算 next_run
     var hm = time.split(':'), d = new Date(); d.setHours(+hm[0], +hm[1], 0, 0); if (d.getTime() < Date.now()) d.setDate(d.getDate() + 1);
-    var body = { name: name, template: template, cron_label: cron_label, enabled: $('#schEnabled').checked, next_run: d.getTime() };
+    var body = { name: name, template: name, cron_label: cron_label, enabled: $('#schEnabled').checked, next_run: d.getTime() };
     try {
-      if (schState.editId) await API.put('/api/schedules/' + schState.editId, body);
-      else { var r = await API.post('/api/schedules', body); schState.selected = r.id; }
-      schModal.hidden = true; toast('已保存'); loadSchedules();
+      if (schState.editId) { await API.put('/api/schedules/' + schState.editId, body); toast('已保存'); }
+      else {
+        var r = await API.post('/api/schedules', body); schState.selected = r.id;
+        // 新增即联动：后端已在看板生成一条对应待办
+        if (r && r.seededItem) { toast('任务已建，并在看板生成待办「' + (r.seededItem.title || name) + '」'); pet.react && pet.react('happy'); }
+        else toast('定时任务已创建');
+      }
+      schModal.hidden = true; loadSchedules();
+      if (typeof loadBoard === 'function' && !$('#paneBoard').hidden) loadBoard();
     } catch (err) { toast('保存失败', 'error'); }
   });
   function fmtDate(ts) { var d = new Date(ts); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -1224,9 +1231,10 @@
     $('#tokenValue').textContent = me.owner;
     $('#tokenLabel').value = me.label || '';
     var isDefault = !!me.isDefault;
+    // 演示工作区不支持改名（后端限制），但可以「重新生成工作区」新建一份自己的
     $('#tokenRename').disabled = isDefault;
-    $('#tokenRegen').disabled = isDefault;
-    $('#tokenLabel').placeholder = isDefault ? '演示工作区（先重新生成一个，才能改名）' : '我的工作区';
+    $('#tokenRegen').disabled = false;
+    $('#tokenLabel').placeholder = isDefault ? '演示工作区（新建一个工作区后可改名）' : '我的工作区';
   }
   $('#tokenCopy').addEventListener('click', function () {
     var v = $('#tokenValue').textContent;
@@ -1235,22 +1243,27 @@
   });
   $('#tokenRename').addEventListener('click', async function () {
     var label = $('#tokenLabel').value.trim();
-    try { await API.put('/api/auth/token', { label: label }); toast('工作区名称已保存'); }
+    try { await API.put('/api/auth/token', { label: label }); toast('工作区名称已保存'); loadWorkspaceRecords(); }
     catch (e) { toast('保存失败', 'error'); }
   });
   $('#tokenRegen').addEventListener('click', async function () {
-    var ok = await confirm('重新生成后旧 token 立即失效，当前设备会自动换用新 token（数据仍归属这份工作区）。确定继续？');
+    var ok = await confirm('新建一个全新的空工作区并切过去？当前工作区（Token、名称、数据）会完整保留，可随时从下方「工作区记录」切回。');
     if (!ok) return;
     try {
-      var t = await API.put('/api/auth/token', { regenerate: true });
+      // 新建独立工作区：旧工作区完整保留在记录里，可复制 token 切回查看其数据
+      var t = await API.post('/api/auth/token', { label: '我的工作区' });
       setToken(t.token);
-      // 展示结果弹窗（工作区记录：名称 / Token / 创建时间）
+      personFilterCache = null; tplFacets = null; journalCache = null;
+      // 展示新工作区信息弹窗（名称 / Token / 创建时间）
       $('#regenName').textContent = t.label || '我的工作区';
       $('#regenToken').textContent = t.token;
       $('#regenTime').textContent = new Date(t.created_at).toLocaleString('zh-CN');
       $('#regenModal').hidden = false;
+      // 切到新工作区后，刷新所有相关数据
       loadTokenPanel();
       loadWorkspaceRecords();
+      if (typeof loadBoard === 'function') loadBoard();
+      toast('已新建并切到新工作区');
     } catch (e) { toast('操作失败', 'error'); }
   });
   $('#regenClose').addEventListener('click', function () { $('#regenModal').hidden = true; });
@@ -1259,15 +1272,45 @@
     toast('已复制 Token');
   });
 
-  // 工作区记录列表
+  // 工作区记录列表：名称 / Token / 创建时间 / 操作（复制 · 切到此工作区查看数据）
   async function loadWorkspaceRecords() {
+    var curToken = getToken();
     try {
       var d = await API.get('/api/auth/tokens');
-      var rows = (d.tokens || []).map(function (r) {
-        return '<tr><td>' + esc(r.label || '我的工作区') + '</td><td><code>' + esc(r.token) + '</code></td><td>' + new Date(r.created_at).toLocaleString('zh-CN') + '</td></tr>';
+      var list = d.tokens || [];
+      if (!list.length) { $('#wsBody').innerHTML = '<tr><td colspan="4" style="color:var(--ink-faint)">暂无记录</td></tr>'; return; }
+      $('#wsBody').innerHTML = list.map(function (r) {
+        var isCur = r.token === curToken;
+        return '<tr' + (isCur ? ' class="ws-cur"' : '') + '>' +
+          '<td>' + esc(r.label || '我的工作区') + (isCur ? ' <span class="ws-badge-cur">当前</span>' : '') + '</td>' +
+          '<td><code class="ws-token-cell">' + esc(r.token) + '</code></td>' +
+          '<td>' + new Date(r.created_at).toLocaleString('zh-CN') + '</td>' +
+          '<td class="ws-op-col">' +
+            '<button class="ws-op-btn" data-copy="' + esc(r.token) + '">复制</button>' +
+            (isCur ? '' : '<button class="ws-op-btn ws-op-switch" data-switch="' + esc(r.token) + '">切到此工作区</button>') +
+          '</td></tr>';
       }).join('');
-      $('#wsBody').innerHTML = rows || '<tr><td colspan="3" style="color:var(--ink-3)">暂无记录</td></tr>';
-    } catch (e) { $('#wsBody').innerHTML = '<tr><td colspan="3" style="color:var(--ink-3)">加载失败</td></tr>'; }
+      // 复制 token
+      $$('#wsBody [data-copy]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (navigator.clipboard) navigator.clipboard.writeText(b.getAttribute('data-copy'));
+          toast('已复制该工作区 Token');
+        });
+      });
+      // 切到某个工作区查看其数据
+      $$('#wsBody [data-switch]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          var tk = b.getAttribute('data-switch');
+          var ok = await confirm('切到这个工作区？将载入它的独立数据（当前工作区不受影响，随时可切回）。');
+          if (!ok) return;
+          setToken(tk);
+          personFilterCache = null; tplFacets = null; journalCache = null;
+          toast('已切到该工作区');
+          loadTokenPanel(); loadWorkspaceRecords();
+          if (typeof loadBoard === 'function') loadBoard();
+        });
+      });
+    } catch (e) { $('#wsBody').innerHTML = '<tr><td colspan="4" style="color:var(--ink-faint)">加载失败</td></tr>'; }
   }
 
   /* ---------------- AI 设置 ---------------- */
