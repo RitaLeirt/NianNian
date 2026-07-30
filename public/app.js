@@ -1282,7 +1282,7 @@
   });
 
   $('#genWeekly').addEventListener('click', async function () {
-    await API.post('/api/journal/weekly'); toast('本周日记生成好了'); pet.react('happy'); loadJournal();
+    await API.post('/api/journal/weekly'); toast('周报生成好了（截至上一个周五）'); pet.react('happy'); loadJournal();
   });
   function fmtTs(ts) { var d = new Date(ts); return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 
@@ -1442,7 +1442,7 @@
   /* 看板顶部高光入口：一键周报 */
   var weklyBtn = $('#btnWeekly');
   if (weklyBtn) weklyBtn.addEventListener('click', async function () {
-    await API.post('/api/journal/weekly'); toast('本周周报生成好了，去日记本看'); pet.react('happy'); switchView('journal');
+    await API.post('/api/journal/weekly'); toast('周报生成好了（截至上一个周五），去日记本看'); pet.react('happy'); switchView('journal');
   });
 
   /* 看板内：时间范围（scope）子标签 */

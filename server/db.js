@@ -22,6 +22,24 @@ const { TEMPLATES } = require('./templates-seed');
 
 const DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_OWNER = 'demo-default';
+
+// 真实时间概念：给定基准时间，算出「最近一个已到的周五」及其所在工作周（周一~周五）的范围。
+// 今天是周五则用今天，否则回退到上一个周五。周报默认落在该周五 18:00。
+function weekEndingFriday(base) {
+  const fri = new Date(base);
+  const day = fri.getDay(); // 0=周日 1=周一 ... 5=周五 6=周六
+  const diff = day === 5 ? 0 : (day === 6 ? 1 : day + 2);
+  fri.setDate(fri.getDate() - diff);
+  fri.setHours(18, 0, 0, 0);
+  const mon = new Date(fri); mon.setDate(fri.getDate() - 4); mon.setHours(0, 0, 0, 0);
+  const end = new Date(fri); end.setHours(23, 59, 59, 999);
+  const dayStart = new Date(fri); dayStart.setHours(0, 0, 0, 0);
+  const fmt = (d) => (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  return {
+    friTs: fri.getTime(), fridayDayStart: dayStart.getTime(), fridayDayEnd: end.getTime(),
+    weekStart: mon.getTime(), weekEnd: end.getTime(), startStr: fmt(mon), endStr: fmt(fri),
+  };
+}
 // 本地用项目内 data/；Vercel 等 Serverless 环境文件系统只读，只有 /tmp 可写，数据库须落到 /tmp。
 // 注：/tmp 在冷启动间不保证持久，每次重建库后会自动重新 seed 示例数据（见 seedFor）。
 const DATA_DIR = process.env.VERCEL
@@ -314,22 +332,37 @@ function seedFor(owner) {
   const jrnCount = db.prepare('SELECT COUNT(*) c FROM journal WHERE owner=?').get(owner).c;
   if (jrnCount === 0) {
     const ins = db.prepare('INSERT INTO journal (owner, ts, kind, text) VALUES (?,?,?,?)');
+    const wk = weekEndingFriday(Date.now());
+    // 上一完整工作周（周一~周五）内的某天某时
+    const wd = (idx, h, m) => { const d = new Date(wk.weekStart); d.setDate(d.getDate() + idx); d.setHours(h, m, 0, 0); return d.getTime(); };
+    // 本周至今（相对今天）
     const at = (daysAgo, h, m) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); d.setHours(h, m, 0, 0); return d.getTime(); };
-    ins.run(owner, at(6, 9, 12), 'note', '记下：上线前评审会');
-    ins.run(owner, at(6, 18, 40), 'push', '推进了一步：上线前评审会');
-    ins.run(owner, at(5, 17, 5), 'done', '这件事放下了：上线前评审会');
-    ins.run(owner, at(4, 10, 30), 'note', '记下：报价后跟进');
-    ins.run(owner, at(4, 15, 50), 'note', '记下：跨部门协同对齐');
-    ins.run(owner, at(3, 9, 40), 'push', '推进了一步：客户合同签署');
-    ins.run(owner, at(3, 14, 20), 'note', '记下：自由设计师尾款');
-    ins.run(owner, at(2, 11, 0), 'note', '记下：供应商发货确认');
-    ins.run(owner, at(2, 16, 45), 'push', '推进了一步：法务审阅合同条款');
+
+    // —— 上一完整工作周：周一~周五，丰富流水，构成「上一个周五的周报」——
+    ins.run(owner, wd(0, 9, 12), 'note', '记下：上线前评审会');
+    ins.run(owner, wd(0, 18, 40), 'push', '推进了一步：上线前评审会');
+    ins.run(owner, wd(1, 10, 30), 'note', '记下：报价后跟进');
+    ins.run(owner, wd(1, 15, 50), 'note', '记下：跨部门协同对齐');
+    ins.run(owner, wd(2, 9, 40), 'push', '推进了一步：客户合同签署');
+    ins.run(owner, wd(2, 14, 20), 'note', '记下：自由设计师尾款');
+    ins.run(owner, wd(3, 11, 0), 'note', '记下：供应商发货确认');
+    ins.run(owner, wd(3, 16, 45), 'push', '推进了一步：法务审阅合同条款');
+    ins.run(owner, wd(4, 10, 5), 'done', '这件事放下了：上线前评审会');
+    ins.run(owner, wd(4, 19, 30), 'done', '这件事放下了：合同盖章寄送');
+    // 周报：落在那个周五 18:00，抬头带真实周范围
+    ins.run(owner, wk.friTs, 'weekly',
+      '【周报 · ' + wk.startStr + ' – ' + wk.endStr + '（周一至周五）】\n\n' +
+      '■ 本周概览\n　　新记 4 件 · 推进 3 次 · 完结 2 件\n\n' +
+      '■ 已完成\n　　✓ 上线前评审会\n　　✓ 合同盖章寄送\n\n' +
+      '■ 推进中\n　　→ 上线前评审会\n　　→ 客户合同签署\n　　→ 法务审阅合同条款\n\n' +
+      '■ 新增待办\n　　· 报价后跟进\n　　· 跨部门协同对齐\n　　· 自由设计师尾款\n　　· 供应商发货确认\n\n' +
+      '小结：这一周把手上的球稳步往前推了推，下周继续盯紧未完结的几件。');
+
+    // —— 本周至今：几条近的流水（尚未到本周五，所以本周还没有周报）——
     ins.run(owner, at(1, 9, 15), 'note', '记下：运营活动排期');
-    ins.run(owner, at(1, 19, 30), 'done', '这件事放下了：合同盖章寄送');
     ins.run(owner, at(0, 8, 50), 'note', '记下：给老板发周报');
     ins.run(owner, at(0, 10, 5), 'note', '记下：约面试候选人时间');
     ins.run(owner, at(0, 13, 20), 'insight', '最近这段时间，念念记录到你推进过 4 次悬着的事——手上的球没有一直凉着，这是个好势头。');
-    ins.run(owner, at(0, 17, 0), 'weekly', '这一周，念念陪你记下了 9 件悬着的事，推进了 3 次，放下了 2 件。\n放下的：上线前评审会；合同盖章寄送\n推进过的：客户合同签署；法务审阅合同条款');
   }
 
   const tplOwn = db.prepare('SELECT COUNT(*) c FROM templates WHERE owner=? AND builtin=0').get(owner).c;
@@ -620,20 +653,20 @@ const Journal = {
     const r = db.prepare('INSERT INTO journal (owner, ts, kind, text) VALUES (?,?,?,?)').run(owner, Date.now(), kind, text);
     return db.prepare('SELECT * FROM journal WHERE id=?').get(r.lastInsertRowid);
   },
+  // 指定时间戳写入（周报要落在对应的周五，而非"此刻"）
+  addAt(owner, kind, text, ts) {
+    const r = db.prepare('INSERT INTO journal (owner, ts, kind, text) VALUES (?,?,?,?)').run(owner, ts, kind, text);
+    return db.prepare('SELECT * FROM journal WHERE id=?').get(r.lastInsertRowid);
+  },
   remove(owner, id) { db.prepare('DELETE FROM journal WHERE id=? AND owner=?').run(id, owner); },
-  // 一键生成本周日记：内置结构化、易读的周报模板；配置 AI 时用语义汇总重写为更自然的一段话
+  // 一键生成周报：按真实时间对齐到「最近一个已到的周五」，覆盖该周（周一~周五），并把周报落在那个周五。
+  // 今天没到本周五时，生成的就是「上一个周五的周报」——符合真实周报节奏。
   async weekly(owner) {
-    const since = Date.now() - 7 * DAY;
-    const rows = db.prepare('SELECT * FROM journal WHERE owner=? AND ts >= ? ORDER BY ts ASC').all(owner, since);
+    const wk = weekEndingFriday(Date.now());
+    const rows = db.prepare('SELECT * FROM journal WHERE owner=? AND ts>=? AND ts<=? ORDER BY ts ASC').all(owner, wk.weekStart, wk.weekEnd);
     const notes = rows.filter((r) => r.kind === 'note');
     const pushes = rows.filter((r) => r.kind === 'push');
     const dones = rows.filter((r) => r.kind === 'done');
-
-    // 时间范围（本周一 → 今天），用于周报抬头
-    const now = new Date();
-    const endStr = (now.getMonth() + 1) + '月' + now.getDate() + '日';
-    const startD = new Date(now.getTime() - 6 * DAY);
-    const startStr = (startD.getMonth() + 1) + '月' + startD.getDate() + '日';
 
     // 去掉流水前缀，抽出干净的事项名
     const clean = (t) => (t || '')
@@ -648,9 +681,9 @@ const Journal = {
     const pushList = uniq(pushes.map((p) => clean(p.text)));
     const newList = uniq(notes.map((n) => clean(n.text)));
 
-    // 内置易读周报模板：抬头 + 概览 + 分区列表 + 结语
+    // 内置易读周报模板：抬头（含真实周范围）+ 概览 + 分区列表 + 结语
     const L = [];
-    L.push('【本周周报 · ' + startStr + ' – ' + endStr + '】');
+    L.push('【周报 · ' + wk.startStr + ' – ' + wk.endStr + '（周一至周五）】');
     L.push('');
     L.push('■ 本周概览');
     L.push('　　新记 ' + notes.length + ' 件 · 推进 ' + pushes.length + ' 次 · 完结 ' + dones.length + ' 件');
@@ -668,7 +701,7 @@ const Journal = {
     else L.push('　　（本周暂无新增）');
     L.push('');
     L.push(rows.length
-      ? '小结：本周把手上的球稳步往前推了推，下周继续盯紧未完结的几件。'
+      ? '小结：这一周把手上的球稳步往前推了推，下周继续盯紧未完结的几件。'
       : '小结：这一周很安静，没有新的悬念——也挺好。');
     const fallback = L.join('\n');
 
@@ -678,7 +711,9 @@ const Journal = {
       '保留「本周概览 / 已完成 / 推进中 / 下周计划」的清晰分区结构，语气专业得体，总长不超过 300 字。',
       fallback);
     const text = ai || fallback;
-    return Journal.add(owner, 'weekly', text);
+    // 同一个周五只保留一份周报：先删掉当天已有的周报，再落在周五
+    db.prepare("DELETE FROM journal WHERE owner=? AND kind='weekly' AND ts>=? AND ts<=?").run(owner, wk.fridayDayStart, wk.fridayDayEnd);
+    return Journal.addAt(owner, 'weekly', text, wk.friTs);
   },
   // 念念的观察：从历史打卡记录里发现跨事项模式，生成一句可追溯的洞察
   insight(owner) {

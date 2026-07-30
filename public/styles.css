@@ -607,7 +607,7 @@ body {
 .tpl-filters { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; padding: 4px 0; }
 .tpl-frow { display: flex; align-items: flex-start; gap: 12px; padding: 4px 0; }
 .tpl-frow + .tpl-frow { border-top: 1px solid rgba(231,225,212,.6); }
-.tpl-frow-label { font-size: 12px; color: var(--ink-faint); width: 74px; flex: none; display: inline-flex; align-items: center; gap: 6px; padding-top: 4px; }
+.tpl-frow-label { font-size: 12px; color: var(--ink-faint); width: 88px; flex: none; display: inline-flex; align-items: center; gap: 6px; padding-top: 4px; white-space: nowrap; }
 .dim-ico { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
 .tpl-frow-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 /* 分类筛选 chip：统一克制风格——中性描边、8px 圆角、更窄的高度，选中态统一 sage */
@@ -692,13 +692,15 @@ body {
 .tag-picker { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--paper-2); }
 .tag-picker-chosen { display: flex; flex-wrap: wrap; gap: 6px; min-height: 22px; }
 .tag-empty { font-size: 12px; color: var(--ink-faint); }
-.tag-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--sage-deep); background: var(--sage-soft); border: 1px solid var(--sage); border-radius: 8px; padding: 3px 6px 3px 9px; }
-.tag-chip button { border: none; background: transparent; color: var(--sage-deep); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; opacity: .7; }
+/* 已选标签：与筛选 chip 选中态一致（高24 / 圆角7 / sage 描边+浅底+深字） */
+.tag-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 6px 0 10px; font-family: var(--font-body); font-size: 12px; color: var(--sage-deep); background: var(--sage-soft); border: 1px solid var(--sage); border-radius: 7px; font-weight: 600; }
+.tag-chip button { border: none; background: transparent; color: var(--sage-deep); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; opacity: .65; }
 .tag-chip button:hover { opacity: 1; }
-.tag-picker-input-row input { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-family: var(--font-body); font-size: 13px; color: var(--ink); background: var(--paper); outline: none; }
+.tag-picker-input-row input { width: 100%; border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; font-family: var(--font-body); font-size: 13px; color: var(--ink); background: var(--paper); outline: none; }
 .tag-picker-input-row input:focus { border-color: var(--sage); }
 .tag-picker-suggest { display: flex; flex-wrap: wrap; gap: 6px; }
-.tag-suggest-chip { border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); cursor: pointer; font-family: var(--font-body); font-size: 12px; padding: 3px 10px; border-radius: 8px; transition: border-color .16s cubic-bezier(0.16,1,0.3,1), color .16s cubic-bezier(0.16,1,0.3,1), background .16s cubic-bezier(0.16,1,0.3,1); }
+/* 推荐标签：与筛选 chip 默认态一致（高24 / 圆角7 / 中性描边） */
+.tag-suggest-chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); cursor: pointer; font-family: var(--font-body); font-size: 12px; transition: border-color .16s cubic-bezier(0.16,1,0.3,1), color .16s cubic-bezier(0.16,1,0.3,1), background .16s cubic-bezier(0.16,1,0.3,1); }
 .tag-suggest-chip:hover { border-color: var(--sage); color: var(--sage-deep); background: var(--sage-soft); }
 
 /* 卡片提示词块：实际填写的提示词内容 */
