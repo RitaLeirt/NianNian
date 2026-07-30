@@ -496,7 +496,7 @@
       var el = document.createElement('div');
       el.className = 'tpl-card';
       el.innerHTML =
-        (t.builtin ? '' : '<button class="tpl-op del" title="删除">✕</button><button class="tpl-op edit" title="编辑">✎</button>') +
+        (t.builtin ? '' : '<div class="tpl-ops"><button class="tpl-op edit" title="编辑话术" aria-label="编辑"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button><button class="tpl-op del" title="删除话术" aria-label="删除"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></div>') +
         '<h3>' + esc(t.name) + '</h3>' +
         tplTagsHtml(t) +
         tplPromptHtml(t) +
@@ -916,13 +916,23 @@
   var REL_LABEL = { upstream: '上游 · 我等 ta', downstream: '下游 · ta 等我', peer: '平级协同', external: '外部 · 甲方/客户' };
   var REL_CLASS = { upstream: 'rel-up', downstream: 'rel-down', peer: 'rel-peer', external: 'rel-ext' };
   var colState = { editId: null, curId: null };
+  var colSearchKw = '';
 
   async function loadColleagues() {
     var data = await API.get('/api/colleagues');
     $('#cnt-people').textContent = data.items.length;
+    var items = data.items;
+    var kw = colSearchKw.trim().toLowerCase();
+    if (kw) items = items.filter(function (c) {
+      return ((c.name || '') + (c.role || '') + (c.persona || '')).toLowerCase().indexOf(kw) >= 0;
+    });
     var grid = $('#colGrid'); grid.innerHTML = '';
-    if (!data.items.length) { grid.innerHTML = '<p class="empty" style="grid-column:1/-1"><span class="headline">还没有对接人——不填也能用念念。</span></p>'; return; }
-    data.items.forEach(function (c) {
+    if (!items.length) {
+      grid.innerHTML = '<p class="empty" style="grid-column:1/-1"><span class="headline">' +
+        (kw ? '没搜到匹配的对接人，换个词试试。' : '还没有对接人——不填也能用念念。') + '</span></p>';
+      return;
+    }
+    items.forEach(function (c) {
       var rel = c.relation || 'peer';
       var el = document.createElement('div');
       el.className = 'col-card';
@@ -968,9 +978,93 @@
     $('#colRole').value = c ? c.role : '';
     $('#colRelation').value = c ? (c.relation || 'peer') : 'peer';
     $('#colPersona').value = c ? c.persona : '';
+    // 话术管理区：仅编辑已有对接人时显示
+    var block = $('#colScriptsBlock');
+    if (c) { colState.curId = c.id; block.hidden = false; loadColScripts(c.id); }
+    else { block.hidden = true; $('#colScriptsList').innerHTML = ''; }
     colModal.hidden = false; $('#colName').focus();
   }
+  // 加载并渲染该对接人的已存话术（查看 / 修改 / 删除）
+  async function loadColScripts(cid) {
+    var c = await API.get('/api/colleagues/' + cid);
+    var box = $('#colScriptsList');
+    var scripts = (c && c.scripts) || [];
+    if (!scripts.length) {
+      box.innerHTML = '<div class="cd-empty">还没有存对接话术。点上方"从话术库挑一句"来添加。</div>';
+      return;
+    }
+    box.innerHTML = '';
+    scripts.forEach(function (s) {
+      var el = document.createElement('div');
+      el.className = 'cd-script';
+      el.innerHTML =
+        '<div class="cd-script-top"><span class="cd-script-name">' + esc(s.name) + '</span>' +
+        '<div class="tpl-tags">' + (s.tone ? '<span class="tg tg-tone"><i style="background:' + (TONE_DOT[s.tone] || '#999') + '"></i>' + esc(s.tone) + '</span>' : '') +
+        (s.scene ? '<span class="tg tg-scene">' + esc(s.scene) + '</span>' : '') +
+        (s.purpose ? '<span class="tg tg-purpose">→ ' + esc(s.purpose) + '</span>' : '') + '</div></div>' +
+        '<p class="cd-script-body">' + esc(s.body) + '</p>' +
+        '<div class="cd-script-ops">' +
+        '<button class="btn btn-ghost btn-sm" data-copy>复制</button>' +
+        '<button class="btn btn-ghost btn-sm" data-edit>修改</button>' +
+        '<button class="btn-icon-sm" data-del title="删除">×</button></div>';
+      el.querySelector('[data-copy]').addEventListener('click', function () {
+        navigator.clipboard && navigator.clipboard.writeText(s.body); toast('已复制话术');
+      });
+      el.querySelector('[data-edit]').addEventListener('click', function () { openEditScript(cid, s); });
+      el.querySelector('[data-del]').addEventListener('click', async function () {
+        var ok = await confirm('删除话术「' + s.name + '」？');
+        if (ok) { await API.del('/api/colleagues/' + cid + '/scripts/' + s.id); toast('已删除'); loadColScripts(cid); loadColleagues(); }
+      });
+      box.appendChild(el);
+    });
+  }
+  // "从话术库挑一句"：在编辑弹窗内触发，复用挑选弹窗
+  $('#colAddScript').addEventListener('click', function () {
+    if (!colState.editId) return;
+    $('#pickForName').textContent = $('#colName').value || '';
+    colState.curId = colState.editId;
+    pickModal.hidden = false; $('#pickSearch').value = ''; renderPickList('');
+    $('#pickSearch').focus();
+  });
+  // 编辑单条话术弹窗
+  var editScriptModal = $('#editScriptModal'), editingScript = { cid: null, sid: null };
+  function openEditScript(cid, s) {
+    editingScript = { cid: cid, sid: s.id };
+    $('#esName').value = s.name || '';
+    $('#esTone').value = s.tone || '';
+    $('#esScene').value = s.scene || '';
+    $('#esPurpose').value = s.purpose || '';
+    $('#esBody').value = s.body || '';
+    editScriptModal.hidden = false; $('#esName').focus();
+  }
+  $('#esClose').addEventListener('click', function () { editScriptModal.hidden = true; });
+  editScriptModal.addEventListener('click', function (e) { if (e.target === editScriptModal) editScriptModal.hidden = true; });
+  $('#editScriptForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var body = {
+      name: $('#esName').value.trim(), tone: $('#esTone').value.trim(),
+      scene: $('#esScene').value.trim(), purpose: $('#esPurpose').value.trim(), body: $('#esBody').value.trim(),
+    };
+    if (!body.name || !body.body) return;
+    try {
+      await API.put('/api/colleagues/' + editingScript.cid + '/scripts/' + editingScript.sid, body);
+      editScriptModal.hidden = true; toast('话术已更新');
+      loadColScripts(editingScript.cid); loadColleagues();
+    } catch (err) { toast('保存失败', 'error'); }
+  });
   $('#colAdd').addEventListener('click', function () { openColModal(null); });
+  // 对接人搜索（防抖）
+  var colSearchTimer;
+  var colSearchInput = $('#colSearch'), colSearchReset = $('#colSearchReset');
+  if (colSearchInput) colSearchInput.addEventListener('input', function () {
+    clearTimeout(colSearchTimer);
+    var v = this.value;
+    if (colSearchReset) colSearchReset.hidden = !v.trim();
+    colSearchTimer = setTimeout(function () { colSearchKw = v; loadColleagues(); }, 200);
+  });
+  if (colSearchReset) colSearchReset.addEventListener('click', function () {
+    colSearchInput.value = ''; colSearchKw = ''; colSearchReset.hidden = true; loadColleagues();
+  });
   $('#colClose').addEventListener('click', function () { colModal.hidden = true; });
   colModal.addEventListener('click', function (e) { if (e.target === colModal) colModal.hidden = true; });
   $('#colForm').addEventListener('submit', async function (e) {
@@ -1048,18 +1142,29 @@
     var list = await API.get('/api/templates' + (kw ? '?kw=' + encodeURIComponent(kw) : ''));
     var box = $('#pickList');
     box.innerHTML = list.slice(0, 40).map(function (t) {
-      return '<button class="pick-item" data-id="' + t.id + '">' +
-        '<span class="pick-name">' + esc(t.name) + '</span>' +
-        '<span class="tpl-tags">' + (t.tone ? '<span class="tg tg-tone"><i style="background:' + (TONE_DOT[t.tone] || '#999') + '"></i>' + esc(t.tone) + '</span>' : '') +
+      var tags = (t.tone ? '<span class="tg tg-tone"><i style="background:' + (TONE_DOT[t.tone] || '#999') + '"></i>' + esc(t.tone) + '</span>' : '') +
         (t.scene ? '<span class="tg tg-scene">' + esc(t.scene) + '</span>' : '') +
-        (t.purpose ? '<span class="tg tg-purpose">→ ' + esc(t.purpose) + '</span>' : '') + '</span>' +
-        '<span class="pick-body">' + esc(t.body) + '</span></button>';
+        (t.purpose ? '<span class="tg tg-purpose">→ ' + esc(t.purpose) + '</span>' : '');
+      // 提示词模板库：展示这条话术背后的「提示词上下文」+ 正文，便于挑选时看清是什么模板
+      var prompt = tplPromptHtml(t);
+      var example = t.body ? '<div class="pick-example"><span class="pick-example-lbl">示例效果</span><p>' + esc(tplExample(t)) + '</p></div>' : '';
+      return '<div class="pick-card" data-id="' + t.id + '">' +
+        '<div class="pick-card-hd"><span class="pick-name">' + esc(t.name) + '</span>' +
+        '<span class="tpl-tags">' + tags + '</span></div>' +
+        prompt + example +
+        '<div class="pick-card-foot"><span class="pick-body-line">' + esc(t.body) + '</span>' +
+        '<button class="btn btn-primary btn-sm pick-attach" type="button">存给 ta</button></div></div>';
     }).join('');
-    $$('.pick-item', box).forEach(function (b) {
+    $$('.pick-attach', box).forEach(function (b) {
       b.addEventListener('click', async function () {
-        var t = list.filter(function (x) { return x.id == b.getAttribute('data-id'); })[0];
+        var card = b.closest('.pick-card');
+        var t = list.filter(function (x) { return x.id == card.getAttribute('data-id'); })[0];
         await API.post('/api/colleagues/' + colState.curId + '/scripts', { name: t.name, tone: t.tone, scene: t.scene, purpose: t.purpose, body: t.body });
-        pickModal.hidden = true; toast('已存为 ta 的对接话术'); openContactDetail(colState.curId); loadColleagues();
+        pickModal.hidden = true; toast('已存为 ta 的对接话术');
+        // 若「编辑对接人」弹窗正开着，刷新其中的话术管理区；否则走对接人详情
+        if (!$('#colModal').hidden && !$('#colScriptsBlock').hidden) loadColScripts(colState.curId);
+        else openContactDetail(colState.curId);
+        loadColleagues();
       });
     });
   }
@@ -1401,9 +1506,26 @@
       idleTimer = setTimeout(function () { setBase('sleeping'); say(pick(VOICE.sleepy)); }, 22000);
     }
 
-    // 逾期巡检：有到点/逾期的事 → alert + 冒泡
+    // 逾期巡检：有到点/逾期的事 → alert + 冒泡；同时巡检定时任务到点 → 生成事项 + 桌宠提醒
     async function patrol() {
       try {
+        // 1) 先巡检定时任务：到点的自动生成事项到看板，并由桌宠提醒
+        try {
+          var tk = await API.post('/api/schedules/tick');
+          if (tk && tk.fired && tk.fired.length) {
+            var f = tk.fired[0];
+            setBase('alert');
+            say('定时任务『' + f.name + '』到点了，我已把「' + f.itemTitle + '」放进今日看板。',
+              '<button class="btn btn-sage" id="bubbleGoBoard">去看板</button><button class="btn btn-ghost" id="bubbleKnow">知道了</button>');
+            var gb = $('#bubbleGoBoard'), bk = $('#bubbleKnow');
+            if (gb) gb.addEventListener('click', function () { bubble.hidden = true; if (typeof switchView === 'function') switchView('board'); });
+            if (bk) bk.addEventListener('click', function () { bubble.hidden = true; });
+            if (typeof loadBoard === 'function' && !$('#paneBoard').hidden) loadBoard();
+            if (typeof loadSchedules === 'function' && !$('#paneSchedules').hidden) loadSchedules();
+            return; // 本轮已给出定时任务提醒，优先级最高
+          }
+        } catch (e) { /* tick 失败静默 */ }
+
         var data = await API.get('/api/items?view=today');
         var hot = data.items.filter(function (it) { return it.status === 'Urgent'; });
         if (hot.length) {

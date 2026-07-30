@@ -303,11 +303,11 @@ function seedFor(owner) {
     const ins = db.prepare('INSERT INTO schedules (owner, name, desc, cron_label, enabled, run_count, next_run, created_at) VALUES (?,?,?,?,?,?,?,?)');
     const nextAt = (h, m) => { const d = new Date(); d.setHours(h, m, 0, 0); if (d.getTime() < now) d.setDate(d.getDate() + 1); return d.getTime(); };
     // 工作日 18:00 提醒生成日报发送给上级
-    ins.run(owner, '工作日生成日报', '提醒自己生成{日期}日报发送给上级', '工作日 18:00 执行', 1, 3, nextAt(18, 0), now);
+    ins.run(owner, '工作日生成日报', '生成{日期}日报发送给上级', '工作日 18:00 执行', 1, 3, nextAt(18, 0), now);
     // 每周五 20:00 提醒整理周报草稿发给上级
-    ins.run(owner, '周五整理周报', '提醒自己整理周报草稿发给上级', '周五 20:00 执行', 1, 2, nextAt(20, 0), now);
+    ins.run(owner, '周五整理周报', '整理本周周报草稿发给上级', '周五 20:00 执行', 1, 2, nextAt(20, 0), now);
     // 每周三 09:00 提醒跟实习生沟通
-    ins.run(owner, '周三沟通实习生', '提醒自己跟实习生沟通', '周三 09:00 执行', 1, 1, nextAt(9, 0), now);
+    ins.run(owner, '周三沟通实习生', '跟实习生沟通本周进展', '周三 09:00 执行', 1, 1, nextAt(9, 0), now);
   }
 
   const jrnCount = db.prepare('SELECT COUNT(*) c FROM journal WHERE owner=?').get(owner).c;
@@ -620,23 +620,61 @@ const Journal = {
     return db.prepare('SELECT * FROM journal WHERE id=?').get(r.lastInsertRowid);
   },
   remove(owner, id) { db.prepare('DELETE FROM journal WHERE id=? AND owner=?').run(id, owner); },
-  // 一键生成本周日记：AI 可增强摘要（配置 AI 时用语义汇总，否则确定性摘要）
+  // 一键生成本周日记：内置结构化、易读的周报模板；配置 AI 时用语义汇总重写为更自然的一段话
   async weekly(owner) {
     const since = Date.now() - 7 * DAY;
     const rows = db.prepare('SELECT * FROM journal WHERE owner=? AND ts >= ? ORDER BY ts ASC').all(owner, since);
     const notes = rows.filter((r) => r.kind === 'note');
     const pushes = rows.filter((r) => r.kind === 'push');
     const dones = rows.filter((r) => r.kind === 'done');
-    // 先算确定性兜底文本
-    const lines = [];
-    lines.push(`这一周，念念陪你记下了 ${notes.length} 件悬着的事，推进了 ${pushes.length} 次，放下了 ${dones.length} 件。`);
-    if (dones.length) lines.push('放下的：' + dones.map((d) => d.text.replace(/^这件事放下了：?/, '')).join('；'));
-    if (pushes.length) lines.push('推进过的：' + pushes.map((p) => p.text).join('；'));
-    if (!rows.length) lines.push('这一周很安静，没有新的悬念——也挺好。');
-    const fallback = lines.join('\n');
-    // 配置了 AI 时，用语义汇总重写为更自然的周报
+
+    // 时间范围（本周一 → 今天），用于周报抬头
+    const now = new Date();
+    const endStr = (now.getMonth() + 1) + '月' + now.getDate() + '日';
+    const startD = new Date(now.getTime() - 6 * DAY);
+    const startStr = (startD.getMonth() + 1) + '月' + startD.getDate() + '日';
+
+    // 去掉流水前缀，抽出干净的事项名
+    const clean = (t) => (t || '')
+      .replace(/^这件事放下了：?/, '')
+      .replace(/^推进了一步：?/, '')
+      .replace(/^记下：?/, '')
+      .replace(/^定时任务「[^」]*」自动生成：?/, '')
+      .trim();
+    const uniq = (arr) => Array.from(new Set(arr.filter(Boolean)));
+
+    const doneList = uniq(dones.map((d) => clean(d.text)));
+    const pushList = uniq(pushes.map((p) => clean(p.text)));
+    const newList = uniq(notes.map((n) => clean(n.text)));
+
+    // 内置易读周报模板：抬头 + 概览 + 分区列表 + 结语
+    const L = [];
+    L.push('【本周周报 · ' + startStr + ' – ' + endStr + '】');
+    L.push('');
+    L.push('■ 本周概览');
+    L.push('　　新记 ' + notes.length + ' 件 · 推进 ' + pushes.length + ' 次 · 完结 ' + dones.length + ' 件');
+    L.push('');
+    L.push('■ 已完成');
+    if (doneList.length) doneList.forEach((t) => L.push('　　✓ ' + t));
+    else L.push('　　（本周暂无完结事项）');
+    L.push('');
+    L.push('■ 推进中');
+    if (pushList.length) pushList.forEach((t) => L.push('　　→ ' + t));
+    else L.push('　　（本周暂无推进记录）');
+    L.push('');
+    L.push('■ 新增待办');
+    if (newList.length) newList.slice(0, 8).forEach((t) => L.push('　　· ' + t));
+    else L.push('　　（本周暂无新增）');
+    L.push('');
+    L.push(rows.length
+      ? '小结：本周把手上的球稳步往前推了推，下周继续盯紧未完结的几件。'
+      : '小结：这一周很安静，没有新的悬念——也挺好。');
+    const fallback = L.join('\n');
+
+    // 配置了 AI 时，用语义汇总重写为更自然、可直接发给上级的周报
     const ai = await callAI(owner,
-      '你是周报助手。根据本周的「记下的事 / 推进 / 放下」流水，生成一段简洁、自然、可直接发给上级的周报（中文，不超过 200 字，不要列点外的废话）。',
+      '你是周报助手。请把下面这份结构化周报流水，改写成一段自然、通顺、可直接发给上级的中文周报，' +
+      '保留「本周概览 / 已完成 / 推进中 / 下周计划」的清晰分区结构，语气专业得体，总长不超过 300 字。',
       fallback);
     const text = ai || fallback;
     return Journal.add(owner, 'weekly', text);
@@ -779,6 +817,15 @@ const Colleagues = {
     return db.prepare('SELECT * FROM contact_scripts WHERE id=?').get(r.lastInsertRowid);
   },
   removeScript(owner, scriptId) { db.prepare('DELETE FROM contact_scripts WHERE id=? AND owner=?').run(scriptId, owner); },
+  // 修改一条已存的对接话术
+  updateScript(owner, scriptId, data) {
+    const cur = db.prepare('SELECT * FROM contact_scripts WHERE id=? AND owner=?').get(scriptId, owner);
+    if (!cur) return null;
+    const m = Object.assign({}, cur, data);
+    db.prepare('UPDATE contact_scripts SET name=?, tone=?, scene=?, purpose=?, body=? WHERE id=? AND owner=?')
+      .run(m.name, m.tone || '', m.scene || '', m.purpose || '', m.body, scriptId, owner);
+    return db.prepare('SELECT * FROM contact_scripts WHERE id=?').get(scriptId);
+  },
 };
 
 /* ============================================================
@@ -823,6 +870,7 @@ const Schedules = {
   remove(owner, id) { db.prepare('DELETE FROM schedules WHERE id=? AND owner=?').run(id, owner); },
   // 执行一次定时任务：根据任务的 desc/template 生成一条悬念事项写入看板，并记录日记。
   // 测试按钮和真实调度都走这个方法，保证"定时任务→事项看板"联动。
+  // dedupe：同一天内同一任务已生成过同名事项则不重复生成（避免看板堆叠）。
   run(owner, id) {
     const s = db.prepare('SELECT * FROM schedules WHERE id=? AND owner=?').get(id, owner);
     if (!s || !s.enabled) return null;
@@ -831,20 +879,52 @@ const Schedules = {
     const now = new Date();
     const dateStr = (now.getMonth() + 1) + '月' + now.getDate() + '日';
     const title = template.replace(/\{周报\}/g, '周报').replace(/\{日期\}/g, dateStr).slice(0, 40);
+    // 去重：今天是否已由该任务生成过同名未完结事项
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const existed = db.prepare('SELECT id FROM items WHERE owner=? AND title=? AND done=0 AND created_at>=?')
+      .get(owner, title, dayStart);
+    if (existed) {
+      db.prepare('UPDATE schedules SET next_run=? WHERE id=? AND owner=?').run(Schedules.nextRunFrom(s), id, owner);
+      return db.prepare('SELECT * FROM items WHERE id=?').get(existed.id);
+    }
     const it = Items.create(owner, {
       title: title,
       who: 'mine',
       person: '',
       waiting: '',
       next_step: '我来推进',
-      ddl: null,
-      ddl_label: '',
+      ddl: dayStart, // 到点生成的事默认今天到期，直接进"今日看板"
+      ddl_label: '今天',
       priority: 'normal',
     });
     Journal.add(owner, 'note', '定时任务「' + s.name + '」自动生成：' + it.title);
     db.prepare('UPDATE schedules SET run_count=run_count+1, next_run=? WHERE id=? AND owner=?')
-      .run(Date.now(), id, owner);
+      .run(Schedules.nextRunFrom(s), id, owner);
     return it;
+  },
+  // 依据 cron_label 推算下一次执行时间（尽力而为：解析时刻 + 频率）
+  nextRunFrom(s) {
+    const label = s.cron_label || '';
+    const m = label.match(/(\d{1,2}):(\d{2})/);
+    const h = m ? +m[1] : 9, mi = m ? +m[2] : 0;
+    const d = new Date(); d.setHours(h, mi, 0, 0);
+    // 频率：每天/工作日 → 明天；每周X → 下一个该星期
+    if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+    return d.getTime();
+  },
+  // 巡检：找出所有「已启用且 next_run 已到点、今天尚未生成事项」的任务，逐一执行 run()。
+  // 返回本次实际触发（新生成事项）的任务清单，供前端桌宠到点提醒。
+  tick(owner) {
+    const now = Date.now();
+    const due = db.prepare('SELECT * FROM schedules WHERE owner=? AND enabled=1 AND next_run IS NOT NULL AND next_run<=?').all(owner, now);
+    const fired = [];
+    due.forEach((s) => {
+      const before = db.prepare('SELECT run_count FROM schedules WHERE id=?').get(s.id).run_count;
+      const it = Schedules.run(owner, s.id);
+      const after = db.prepare('SELECT run_count FROM schedules WHERE id=?').get(s.id).run_count;
+      if (it && after > before) fired.push({ id: s.id, name: s.name, itemId: it.id, itemTitle: it.title });
+    });
+    return fired;
   },
 };
 

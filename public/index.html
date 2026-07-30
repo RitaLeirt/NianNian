@@ -331,22 +331,23 @@
 
       <!-- 看板 / 周期配置 / 模板 / 日记本 / 占位页 面板容器 -->
       <section id="paneBoard" class="pane" aria-label="事项看板">
-        <!-- 看板顶部：标题 + 搜索 + 一键周报（参考截图） -->
+        <!-- 看板顶部：标题 + 标语同行 + 一键周报 -->
         <div class="board-topbar">
           <h1 id="boardTitle" class="board-h1">今日看板</h1>
-          <div class="board-topbar-search">
-            <span class="search-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
-            </span>
-            <input id="searchInput" type="search" placeholder="搜索事项、人名、进展…" aria-label="搜索" />
-            <button id="searchClear" class="search-clear" hidden aria-label="清除搜索">×</button>
-          </div>
+          <p id="boardSub" class="board-subline">今天该动的球，念念替你盯着。</p>
           <button id="btnWeekly" class="btn-week-report" title="把日记揉成一段可复制的周报">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg>
             一键周报
           </button>
         </div>
-        <p id="boardSub" class="board-subline">今天该动的球，念念替你盯着。</p>
+        <!-- 搜索框：单独一行，样式与日记本/沟通对象一致 -->
+        <div class="tpl-search board-search">
+          <span class="tpl-search-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+          </span>
+          <input id="searchInput" type="search" placeholder="搜索事项、人名、进展…" aria-label="搜索" />
+          <button id="searchClear" class="tpl-reset" hidden aria-label="清除搜索">清空</button>
+        </div>
 
         <!-- 一行筛选：时间范围 + 紧急程度 + 对方 + 视图切换 -->
         <div class="board-controls">
@@ -419,11 +420,20 @@
             <button class="seg-btn is-on" role="tab" data-csub="people">我的对接人 <em id="cnt-people">0</em></button>
             <button class="seg-btn" role="tab" data-csub="library">话术 / 提示词库</button>
           </div>
-          <button id="colAdd" class="btn btn-sage col-add-btn">+ 添加对接人</button>
         </div>
 
         <!-- 子视图 A：对接人 -->
         <div id="contactsPeople" class="contacts-view">
+          <div class="col-toolbar-row">
+            <div class="tpl-search tpl-search-grow">
+              <span class="tpl-search-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+              </span>
+              <input id="colSearch" type="search" placeholder="搜对接人姓名、职业或人设…" aria-label="搜索对接人" />
+              <button id="colSearchReset" class="tpl-reset" hidden>清空</button>
+            </div>
+            <button id="colAdd" class="btn btn-sage col-add-btn">+ 添加对接人</button>
+          </div>
           <div id="colGrid" class="col-grid" aria-live="polite"></div>
         </div>
 
@@ -722,6 +732,39 @@
           <button type="submit" class="btn btn-primary">保存</button>
         </div>
       </form>
+
+      <!-- 已添加话术管理（仅编辑已有对接人时显示）：查看 / 新增 / 删除 / 修改 -->
+      <div id="colScriptsBlock" class="col-scripts-block" hidden>
+        <div class="col-scripts-head">
+          <h4>与 ta 对接的话术</h4>
+          <button id="colAddScript" class="btn btn-sage btn-sm">+ 从话术库挑一句</button>
+        </div>
+        <div id="colScriptsList" class="cd-scripts"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑单条对接话术 -->
+  <div id="editScriptModal" class="modal" hidden>
+    <div class="modal-card modal-card-lg">
+      <h3>编辑话术</h3>
+      <form id="editScriptForm" class="edit-form" autocomplete="off">
+        <label>话术名 <input id="esName" type="text" required maxlength="30" placeholder="如：温和跟进" /></label>
+        <div class="edit-row">
+          <label>语气 <input id="esTone" type="text" maxlength="10" placeholder="如：温和" /></label>
+          <label>场景 <input id="esScene" type="text" maxlength="10" placeholder="如：跟进" /></label>
+          <label>目的 <input id="esPurpose" type="text" maxlength="10" placeholder="如：等回复" /></label>
+        </div>
+        <label>话术正文
+          <textarea id="esBody" rows="3" required placeholder="可用 {对方} {在等} {事} 占位"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="esClose" class="btn btn-ghost">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
     </div>
   </div>
 
@@ -738,13 +781,19 @@
     </div>
   </div>
 
-  <!-- 从话术库挑一句 存给某人 -->
+  <!-- 从话术库挑一句 存给某人（内嵌话术提示词模板库） -->
   <div id="pickScriptModal" class="modal" hidden>
-    <div class="modal-card modal-card-lg">
-      <h3>挑一句存给 <span id="pickForName"></span></h3>
-      <input id="pickSearch" class="set-input" style="width:100%" type="search" placeholder="搜话术…" />
+    <div class="modal-card modal-card-xl pick-modal-card">
+      <button id="pickClose" class="cd-close" aria-label="关闭">×</button>
+      <h3>话术 / 提示词模板库 · 挑一句存给 <span id="pickForName"></span></h3>
+      <p class="modal-item">每条都是「照抄就能发」的话术，也是「换个人设都能套」的提示词——看清上下文，挑一条存给 ta。</p>
+      <div class="tpl-search">
+        <span class="tpl-search-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+        </span>
+        <input id="pickSearch" type="search" placeholder="搜话术名、正文或标签…" aria-label="搜话术" />
+      </div>
       <div id="pickList" class="pick-list"></div>
-      <div class="modal-actions"><button id="pickClose" class="btn btn-ghost">关闭</button></div>
     </div>
   </div>
 

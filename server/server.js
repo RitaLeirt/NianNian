@@ -381,6 +381,10 @@ async function handleApi(req, res, url) {
     /* ======== Schedules（定时任务） ======== */
     if (resource === 'schedules') {
       if (method === 'GET' && !id) return sendJSON(res, 200, { items: Schedules.list(owner), counts: Schedules.counts(owner) });
+      // POST /api/schedules/tick —— 巡检到点任务：生成事项到看板，返回本次触发清单（供桌宠提醒）
+      if (method === 'POST' && seg[2] === 'tick') {
+        return sendJSON(res, 200, { fired: Schedules.tick(owner) });
+      }
       if (method === 'GET' && id) {
         const s = Schedules.get(owner, id);
         return s ? sendJSON(res, 200, s) : sendError(res, 404, '任务不存在');
@@ -436,6 +440,14 @@ async function handleApi(req, res, url) {
       if (method === 'DELETE' && id && action === 'scripts' && seg[4]) {
         Colleagues.removeScript(owner, parseInt(seg[4], 10));
         return sendJSON(res, 200, { ok: true });
+      }
+      // PUT/PATCH /api/colleagues/:id/scripts/:sid —— 修改一条对接话术
+      if ((method === 'PUT' || method === 'PATCH') && id && action === 'scripts' && seg[4]) {
+        const body = await readBody(req);
+        if (body === null) return sendError(res, 400, '无效的 JSON 请求体');
+        if (!body.name || !body.body) return sendError(res, 400, '话术名和正文不能为空');
+        const s = Colleagues.updateScript(owner, parseInt(seg[4], 10), body);
+        return s ? sendJSON(res, 200, s) : sendError(res, 404, '话术不存在');
       }
       if ((method === 'PUT' || method === 'PATCH') && id) {
         const body = await readBody(req);
