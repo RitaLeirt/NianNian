@@ -641,6 +641,15 @@
       <div id="scriptTplList" class="script-tpl-list"></div>
       <textarea id="scriptOut" class="script-out" readonly rows="4" placeholder="选一个模板，念念替你把话说圆…"></textarea>
       <p id="scriptSource" class="script-source" hidden></p>
+      <!-- 桌宠触发时显示：发完消息后在这里更新进度，直接同步到看板 -->
+      <div id="scriptItemActions" class="script-item-actions" hidden>
+        <span class="sia-label">发完消息后，点一下更新进度（同步到看板）：</span>
+        <div class="sia-btns">
+          <button class="btn btn-ghost btn-sm" data-sact="hold">先放一放</button>
+          <button class="btn btn-ghost btn-sm" data-sact="push">推进一步</button>
+          <button class="btn btn-sage btn-sm" data-sact="done">打卡完成</button>
+        </div>
+      </div>
       <div class="modal-actions">
         <button id="scriptClose" class="btn btn-ghost">关闭</button>
         <button id="scriptCopy" class="btn btn-primary">复制</button>

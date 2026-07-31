@@ -657,6 +657,17 @@
 
   /* ---------------- 话术弹窗 ---------------- */
   var scriptModal = $('#scriptModal'), scriptItem = null;
+  // 事项操作（先放一放 / 推进一步 / 打卡完成）——看板卡片与桌宠弹窗共用，操作后统一同步看板。
+  // 桌宠所有提示都基于看板数据，操作也回写看板，保证进度一致。
+  async function itemAction(it, act) {
+    try {
+      if (act === 'hold') { await API.post('/api/items/' + it.id + '/hold', { hours: 6 }); toast('「' + it.title + '」先放一放，6 小时后再看'); }
+      else if (act === 'push') { await API.post('/api/items/' + it.id + '/push'); toast('推了一下，凉的天数清零了'); pet.react('happy'); }
+      else if (act === 'done') { await API.post('/api/items/' + it.id + '/complete'); showUndo('「' + it.title + '」已放下', it.id, 'restore'); pet.react('happy'); }
+      if (typeof loadBoard === 'function') loadBoard();
+      return true;
+    } catch (e) { toast('操作失败，请重试', 'error'); return false; }
+  }
   // 生成话术：走 /api/scripts/generate —— 配置了 AI 就用 AI（结合提示词+对接人身份+事项上下文），
   // 未配置则后端自动回退占位符规则。前端据 r.ai 标注来源。
   async function genScript(it, tplId) {
@@ -683,6 +694,7 @@
     $('#scriptForItem').textContent = '为「' + it.title + '」挑一句话术';
     $('#scriptOut').value = '';
     if ($('#scriptSource')) $('#scriptSource').hidden = true;
+    $('#scriptItemActions').hidden = true;
     var tpls = await API.get('/api/templates');
     buildTplBtns(it, $('#scriptTplList'), tpls);
     scriptModal.hidden = false;
@@ -693,10 +705,34 @@
     $('#scriptForItem').textContent = '「' + it.title + '」的话术';
     $('#scriptOut').value = text || '';
     if ($('#scriptSource')) $('#scriptSource').hidden = true;
+    $('#scriptItemActions').hidden = true;
     // 也保留模板选择列表，方便换一句
     API.get('/api/templates').then(function (tpls) { buildTplBtns(it, $('#scriptTplList'), tpls); });
     scriptModal.hidden = false;
   }
+  // 桌宠「推一下」入口：弹出可复制话术（自动按首个模板生成，可切换）+ 看板同款操作按钮。
+  // 桌宠只是更便捷的提示/按钮/操作平台，数据与操作都以看板为准。
+  function openPushHelp(it) {
+    scriptItem = it;
+    $('#scriptForItem').textContent = '推一下「' + it.title + '」——先复制话术发出去：';
+    $('#scriptOut').value = '念念正在斟酌…';
+    if ($('#scriptSource')) $('#scriptSource').hidden = true;
+    $('#scriptItemActions').hidden = false;
+    API.get('/api/templates').then(function (tpls) {
+      buildTplBtns(it, $('#scriptTplList'), tpls);
+      if (tpls[0]) genScript(it, tpls[0].id); else $('#scriptOut').value = '';
+    });
+    scriptModal.hidden = false;
+  }
+  // 话术弹窗内的进度按钮：与看板同款，操作后同步看板
+  $$('#scriptItemActions [data-sact]').forEach(function (b) {
+    b.addEventListener('click', async function () {
+      if (!scriptItem) return;
+      var act = b.getAttribute('data-sact');
+      var ok = await itemAction(scriptItem, act);
+      if (ok && act === 'done') scriptModal.hidden = true;
+    });
+  });
   $('#scriptClose').addEventListener('click', function () { scriptModal.hidden = true; });
   $('#scriptCopy').addEventListener('click', function () {
     var t = $('#scriptOut').value; if (!t) return;
@@ -1501,6 +1537,65 @@
       revertTimer = setTimeout(function () { revertTimer = null; cat.setState(baseState); }, ms || 1800);
     }
 
+    // 「推一下」：直接在气泡里自动生成可复制话术（依据事项+对接人已填信息，AI 优先），
+    // 无需选择框、无需额外弹窗；下方带看板同款进度按钮，操作即同步看板。
+    function fetchPushScript(it, scriptEl, srcEl) {
+      scriptEl.textContent = '念念正在斟酌…';
+      if (srcEl) srcEl.hidden = true;
+      API.post('/api/scripts/auto', { itemId: it.id }).then(function (r) {
+        scriptEl.textContent = (r && r.text) || '（没能生成，稍后再试）';
+        if (srcEl) {
+          srcEl.hidden = false;
+          srcEl.textContent = r && r.ai ? '· AI 依据对方与事项生成'
+            : (r && r.source === 'saved') ? '· 套用了 ta 的既有话术'
+            : (r && r.source === 'template') ? '· 套用了匹配模板'
+            : '· 念念自动拟的';
+          srcEl.classList.toggle('is-ai', !!(r && r.ai));
+        }
+      }).catch(function () { scriptEl.textContent = '（生成失败，稍后再试）'; });
+    }
+    function pushHelp(it) {
+      setBase('alert');
+      bubble.classList.add('bubble-push');
+      bubble.hidden = false;
+      clearTimeout(say._t);
+      bubble.innerHTML =
+        '<button class="pushb-close" id="pushbClose" aria-label="关闭">×</button>' +
+        '<div class="pushb-head">推一下『' + esc(it.title) + '』' + (it.person ? ' · 发给 ' + esc(it.person) : '') + '</div>' +
+        '<div class="pushb-script" id="pushbScript">念念正在斟酌…</div>' +
+        '<div class="pushb-src" id="pushbSrc" hidden></div>' +
+        '<div class="pushb-row">' +
+          '<button class="btn btn-primary btn-sm" id="pushbCopy">复制话术</button>' +
+          '<button class="btn btn-ghost btn-sm" id="pushbRegen">换一句</button>' +
+        '</div>' +
+        '<div class="pushb-actions">' +
+          '<span class="pushb-tip">发完消息后，更新进度（同步看板）：</span>' +
+          '<div class="pushb-abtns">' +
+            '<button class="btn btn-ghost btn-sm" data-pa="hold">先放一放</button>' +
+            '<button class="btn btn-ghost btn-sm" data-pa="push">推进一步</button>' +
+            '<button class="btn btn-sage btn-sm" data-pa="done">打卡完成</button>' +
+          '</div>' +
+        '</div>';
+      var scriptEl = bubble.querySelector('#pushbScript');
+      var srcEl = bubble.querySelector('#pushbSrc');
+      fetchPushScript(it, scriptEl, srcEl);
+      function closeBubble() { bubble.hidden = true; bubble.classList.remove('bubble-push'); }
+      bubble.querySelector('#pushbClose').addEventListener('click', closeBubble);
+      bubble.querySelector('#pushbCopy').addEventListener('click', function () {
+        var t = scriptEl.textContent || '';
+        if (navigator.clipboard) navigator.clipboard.writeText(t);
+        toast('话术已复制，去发给 ' + (it.person || '对方') + ' 吧');
+        react('happy');
+      });
+      bubble.querySelector('#pushbRegen').addEventListener('click', function () { fetchPushScript(it, scriptEl, srcEl); });
+      bubble.querySelectorAll('[data-pa]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          var ok = await itemAction(it, b.getAttribute('data-pa'));
+          if (ok) closeBubble();
+        });
+      });
+    }
+
     /* 悬停"喂一笔"面板：文字 + 图片喂猫 */
     var feedEl = $('#petFeed'), feedInput = $('#petFeedInput'), thumbsEl = $('#petThumbs');
     var fileInput = $('#petFileInput'), dropEl = $('#petDrop');
@@ -1640,7 +1735,8 @@
           say('『' + it.title + '』' + (it.cold_days ? '凉 ' + it.cold_days + ' 天了' : '今天到点了') + '，要不要推一下？',
             '<button class="btn btn-sage" id="bubblePush">推一下</button><button class="btn btn-ghost" id="bubbleLater">待会</button>');
           var pb = $('#bubblePush'), bl = $('#bubbleLater');
-          if (pb) pb.addEventListener('click', async function () { await API.post('/api/items/' + it.id + '/push'); bubble.hidden = true; react('happy'); loadBoard(); });
+          // 「推一下」→ 直接在气泡里自动生成可复制话术 + 看板同款操作按钮（无额外弹窗）
+          if (pb) pb.addEventListener('click', function () { pushHelp(it); });
           if (bl) bl.addEventListener('click', function () { bubble.hidden = true; });
         } else {
           // 有等对方的事 → waiting，否则 idle
@@ -1729,7 +1825,8 @@
         initInteractions();
         initFeed();
         resetIdle();
-        patrol();
+        // 首次巡检延到问候语消失之后再跑，避免「推一下」气泡被开机问候覆盖
+        setTimeout(patrol, 4800);
         setInterval(patrol, 45000);
         // 恢复位置
         API.get('/api/pet').then(function (p) {
@@ -1740,7 +1837,7 @@
       });
     }
 
-    return { boot: boot, react: react, say: say, quickNote: quickNote, setTone: setTone };
+    return { boot: boot, react: react, say: say, quickNote: quickNote, setTone: setTone, patrol: patrol };
   })();
 
   /* ============================================================
@@ -1761,6 +1858,8 @@
       appStarted = true;
       tokenReady.then(function () { switchView('board'); });
     } else if (toApp) { loadBoard(); }
+    // 进入工作台后主动巡检一次：桌宠依据看板数据冒出「推一下」建议（延迟等看板加载完）
+    if (toApp && pet && pet.patrol) setTimeout(function () { pet.patrol(); }, 1400);
   }
 
   // 桌宠总开关（挪到「宠物」设置页里，默认开启）

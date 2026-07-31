@@ -543,8 +543,13 @@ body {
 
 @media (max-width: 900px) {
   .sch-layout { grid-template-columns: 1fr; }
-  .board-controls { flex-direction: column; align-items: stretch; }
-  .seg { justify-content: center; flex-wrap: wrap; }
+  /* 看板筛选：竖向堆叠，每组独占一行、左对齐、可横向滚动；去掉居中的碎竖线分隔符 */
+  .board-controls { flex-direction: column; align-items: stretch; gap: 8px; }
+  .board-sep, .board-spacer { display: none; }
+  .board-controls .seg { width: 100%; justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; }
+  .board-controls .filter-select, .board-controls .seg-view { width: 100%; }
+  .board-controls .seg-view { justify-content: flex-start; }
+  .seg { justify-content: flex-start; flex-wrap: wrap; }
   .gantt-label { flex-basis: 90px; }
   .gantt-scale { margin-left: 100px; }
   .board-col .suspense-card { width: 100%; margin-right: 0; }
@@ -787,6 +792,20 @@ body {
 .speech-bubble::after { content: ""; position: absolute; bottom: -8px; right: 42px; border: 8px solid transparent; border-top-color: var(--paper); border-bottom: 0; }
 .speech-bubble .bubble-cta { margin-top: 8px; display: flex; gap: 8px; }
 .speech-bubble .bubble-cta .btn { font-size: 12px; padding: 5px 10px; min-height: 32px; }
+/* 「推一下」内联气泡：直接展示可复制话术 + 看板同款进度按钮，无需额外弹窗 */
+.speech-bubble.bubble-push { max-width: 320px; min-width: 280px; padding: 14px 16px 14px; }
+.pushb-close { position: absolute; top: 8px; right: 10px; border: none; background: transparent; color: var(--ink-faint); font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+.pushb-close:hover { color: var(--ink); }
+.pushb-head { font-family: var(--font-display); font-size: 13.5px; color: var(--ink); padding-right: 20px; margin-bottom: 8px; }
+.pushb-script { background: var(--paper-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.6; color: var(--ink); white-space: pre-wrap; max-height: 160px; overflow-y: auto; }
+.pushb-src { margin: 6px 2px 0; font-size: 11px; color: var(--ink-faint); }
+.pushb-src.is-ai { color: var(--sage-deep); }
+.pushb-row { display: flex; gap: 8px; margin-top: 10px; }
+.pushb-row .btn { font-size: 12px; padding: 6px 12px; min-height: 32px; }
+.pushb-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.pushb-tip { display: block; font-size: 11.5px; color: var(--ink-soft); margin-bottom: 7px; }
+.pushb-abtns { display: flex; gap: 6px; flex-wrap: wrap; }
+.pushb-abtns .btn { font-size: 12px; padding: 5px 10px; min-height: 30px; flex: 1; }
 .yarn-pop { position: fixed; font-size: 20px; pointer-events: none; z-index: 70; animation: yarnUp 1s ease-out forwards; }
 @keyframes yarnUp { from { opacity: 1; transform: translateY(0) scale(.8);} to { opacity: 0; transform: translateY(-46px) scale(1.2);} }
 
@@ -802,6 +821,10 @@ body {
 .script-out { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-family: var(--font-body); font-size: 14px; resize: vertical; }
 .script-source { margin: 8px 2px 0; font-size: 12px; color: var(--ink-faint); }
 .script-source.is-ai { color: var(--sage-deep); }
+/* 桌宠触发话术弹窗内的进度操作行：与看板同款按钮，操作后同步看板 */
+.script-item-actions { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.script-item-actions .sia-label { display: block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 8px; }
+.script-item-actions .sia-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 
 .toast {
@@ -811,20 +834,80 @@ body {
 }
 
 /* ============ 响应式 ============ */
-@media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; }
-  .sidebar { flex-direction: row; align-items: center; flex-wrap: wrap; padding: 14px; }
-  .brand { margin-bottom: 0; margin-right: 12px; }
-  .nav { flex-direction: row; flex-wrap: wrap; flex: 1; }
-  .nav-item { width: auto; padding: 8px 12px; }
-  .nav-item .nav-count { display: none; }
-  .sidebar-pet { display: none; }
-  .workspace { max-height: none; }
+/* 大屏 / 页面缩小：约束内容最大宽度并居中，避免超宽拉伸、保持易读 */
+@media (min-width: 1500px) {
+  .note-zone, .pane { max-width: 1280px; margin-left: auto; margin-right: auto; }
 }
-@media (max-width: 560px) {
-  .workspace { padding: 20px 16px 80px; }
-  .board-grid, .tpl-grid { grid-template-columns: 1fr; }
-  .pet-float { right: 12px; bottom: 12px; transform: scale(.85); }
+
+/* 平板 / 窄桌面：侧边栏变为顶部横条；品牌与图标在第一行，导航独占第二行始终可见 */
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar {
+    position: sticky; top: 0; z-index: 40;
+    flex-direction: row; align-items: center; flex-wrap: wrap;
+    padding: 10px 14px; gap: 10px;
+    border-right: none; border-bottom: 1px solid var(--line-on-bg);
+  }
+  .sidebar-topicons { margin-bottom: 0; flex: none; width: auto; }
+  .brand { margin-bottom: 0; margin-right: auto; flex: none; padding: 0; }
+  .brand-avatar { width: 34px; height: 34px; border-radius: 10px; }
+  .brand-text h1 { font-size: 17px; }
+  .brand-text p { display: none; }
+  /* 导航：改为固定底部栏，永远可见可点（经典移动端范式，避免被顶部栏裁切） */
+  .nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    flex-direction: row; flex-wrap: nowrap; gap: 2px;
+    background: var(--sidebar); border-top: 1px solid var(--line-on-bg);
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    box-shadow: 0 -2px 14px rgba(0,0,0,.08);
+  }
+  .nav-item {
+    flex: 1 1 0; min-width: 0; width: auto;
+    flex-direction: column; justify-content: center; gap: 3px;
+    padding: 7px 4px; font-size: 11px; white-space: nowrap; border-radius: 12px;
+  }
+  .nav-item .nav-ico { width: 20px; height: 20px; }
+  .nav-item > span:nth-child(2) { flex: none; }
+  .nav-item .nav-count { display: none; }
+  .nav-pet-toggle, .sidebar-pet, .sidebar-foot { display: none; }
+  .workspace { max-height: none; padding-bottom: 92px; }
+}
+
+/* 手机：单列、堆叠、弹窗改底部抽屉、桌宠气泡自适应 */
+@media (max-width: 600px) {
+  .workspace { padding: 18px 14px 96px; }
+  .board-grid, .tpl-grid, .col-grid, .board-col { grid-template-columns: 1fr; }
+  .board-topbar { gap: 6px; }
+  .board-h1 { font-size: 24px; }
+  .btn-week-report { margin-left: 0; }
+  .seg { flex-wrap: wrap; justify-content: flex-start; }
+  /* 对接人 / 话术工具栏：搜索框、排序、按钮竖排占满 */
+  .contacts-header { flex-direction: column; align-items: stretch; }
+  .contacts-header .col-add-btn, .tpl-toolbar .col-add-btn { width: 100%; }
+  .col-toolbar-row { flex-direction: column; align-items: stretch; }
+  .col-toolbar-row .col-add-btn { width: 100%; }
+  .tpl-toolbar { flex-wrap: wrap; }
+  .tpl-toolbar .tpl-search-grow { flex-basis: 100%; }
+  .tpl-sort { flex: 1; }
+  .tpl-frow { flex-direction: column; gap: 4px; }
+  .tpl-frow-label { width: auto; padding-top: 0; }
+  .note-bar { padding: 8px 12px; gap: 8px; }
+  /* 弹窗改为贴底抽屉，更好单手操作，内容可滚动 */
+  .modal { align-items: flex-end; }
+  .modal-card, .modal-card-lg, .modal-card-xl { width: 100%; max-width: 100%; border-radius: 20px 20px 0 0; padding: 20px 18px calc(18px + env(safe-area-inset-bottom, 0px)); max-height: 90vh; overflow-y: auto; }
+  .edit-row { grid-template-columns: 1fr; }
+  /* 桌宠与推一下气泡自适应，避免溢出屏幕 */
+  .pet-float { right: 10px; bottom: 100px; transform: scale(.82); transform-origin: bottom right; }
+  .speech-bubble { max-width: 76vw; }
+  .speech-bubble.bubble-push { max-width: 88vw; min-width: 0; right: 0; }
+  .pushb-abtns .btn { flex: 1 1 30%; }
+}
+
+/* 超小屏：进一步瘦身 */
+@media (max-width: 380px) {
+  .brand-text h1 { display: none; }
+  .board-h1 { font-size: 21px; }
 }
 
 /* 减少动效 */

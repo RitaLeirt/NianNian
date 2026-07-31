@@ -356,6 +356,14 @@ async function handleApi(req, res, url) {
       const r = await Templates.generate(owner, body.itemId, body.tplId, body.colleagueId);
       return r ? sendJSON(res, 200, r) : sendError(res, 404, '事项或模板不存在');
     }
+    // 「推一下」自动话术：只需 itemId，依据事项+对接人已填信息自动生成（AI 优先，否则自主生成）
+    if (resource === 'scripts' && method === 'POST' && seg[2] === 'auto') {
+      const body = await readBody(req);
+      if (body === null) return sendError(res, 400, '无效的 JSON 请求体');
+      if (!body.itemId) return sendError(res, 400, '需要 itemId');
+      const r = await Templates.autoScript(owner, body.itemId);
+      return r ? sendJSON(res, 200, r) : sendError(res, 404, '事项不存在');
+    }
 
     /* ======== Pet ======== */
     if (resource === 'pet') {
