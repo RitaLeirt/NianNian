@@ -793,6 +793,28 @@ const Templates = {
       .replace(/\{事\}/g, it.title || '这件事');
     return { text, item: it.title, template: tpl.name };
   },
+  // AI 生成话术：以模板提示词(scorpion)为 system，结合事项 + 对接人身份为 user；
+  // 未配置 AI 或调用失败时，回退到占位符渲染。返回 { text, item, template, ai }。
+  async generate(owner, itemId, tplId, colleagueId) {
+    const it = db.prepare('SELECT * FROM items WHERE id=? AND owner=?').get(itemId, owner);
+    const tpl = db.prepare('SELECT * FROM templates WHERE id=? AND (builtin=1 OR owner=?)').get(tplId, owner);
+    if (!it || !tpl) return null;
+    let colleague = null;
+    if (colleagueId) colleague = db.prepare('SELECT * FROM colleagues WHERE id=? AND owner=?').get(colleagueId, owner);
+    // 未显式指定对接人时，按事项里的「对方」姓名自动匹配已有对接人，让其身份/人设进入提示词
+    if (!colleague && it.person) colleague = db.prepare('SELECT * FROM colleagues WHERE owner=? AND name=?').get(owner, it.person);
+    const fallback = Templates.render(owner, itemId, tplId) || { text: '', item: it.title, template: tpl.name };
+    const sys = (tpl.scorpion && tpl.scorpion.trim())
+      ? tpl.scorpion
+      : '你是沟通话术助手，根据场景生成一句自然、得体、可直接发送的中文消息。';
+    let user = '场景：' + (tpl.scene || '') + '\n目的：' + (tpl.purpose || '') + '\n语气：' + (tpl.tone || '') + '\n事项：' + it.title;
+    if (it.person) user += '\n对方：' + it.person;
+    if (it.waiting) user += '\n在等：' + it.waiting;
+    if (colleague) user += '\n对接人身份：' + (colleague.role || '') + (colleague.persona ? '（' + colleague.persona + '）' : '') + '，关系：' + (colleague.relation || '');
+    user += '\n请只输出一句可直接发送的话术，不要解释、不要加引号。';
+    const ai = await callAI(owner, sys, user);
+    return ai ? { text: ai, item: it.title, template: tpl.name, ai: true } : Object.assign(fallback, { ai: false });
+  },
 };
 
 /* ============================================================

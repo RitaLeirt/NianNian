@@ -349,25 +349,12 @@ async function handleApi(req, res, url) {
       return r ? sendJSON(res, 200, r) : sendError(res, 404, '事项或模板不存在');
     }
     // AI 生成话术：结合模板提示词(scorpion) + 对接人身份 + 事项上下文，产出自然话术；未配置 AI 则回退占位符
-    if (resource === 'scripts' && method === 'POST' && action === 'generate') {
+    if (resource === 'scripts' && method === 'POST' && seg[2] === 'generate') {
       const body = await readBody(req);
+      if (body === null) return sendError(res, 400, '无效的 JSON 请求体');
       if (!body.itemId || !body.tplId) return sendError(res, 400, '需要 itemId 和 tplId');
-      const it = db.prepare('SELECT * FROM items WHERE id=? AND owner=?').get(body.itemId, owner);
-      const tpl = db.prepare('SELECT * FROM templates WHERE id=? AND (builtin=1 OR owner=?)').get(body.tplId, owner);
-      if (!it || !tpl) return sendError(res, 404, '事项或模板不存在');
-      let colleague = null;
-      if (body.colleagueId) colleague = db.prepare('SELECT * FROM colleagues WHERE id=? AND owner=?').get(body.colleagueId, owner);
-      const fallback = Templates.render(owner, body.itemId, body.tplId);
-      const sys = (tpl.scorpion && tpl.scorpion.trim())
-        ? tpl.scorpion
-        : '你是沟通话术助手，根据场景生成一句自然、得体、可直接发送的中文消息。';
-      let user = '场景：' + (tpl.scene || '') + '\n目的：' + (tpl.purpose || '') + '\n事项：' + it.title;
-      if (it.person) user += '\n对方：' + it.person;
-      if (it.waiting) user += '\n在等：' + it.waiting;
-      if (colleague) user += '\n对接人身份：' + (colleague.role || '') + (colleague.persona ? '（' + colleague.persona + '）' : '') + '，关系：' + (colleague.relation || '');
-      user += '\n请生成一句可直接发送的话术。';
-      const ai = await callAI(owner, sys, user);
-      return sendJSON(res, 200, ai ? { text: ai, item: it.title, template: tpl.name, ai: true } : Object.assign(fallback, { ai: false }));
+      const r = await Templates.generate(owner, body.itemId, body.tplId, body.colleagueId);
+      return r ? sendJSON(res, 200, r) : sendError(res, 404, '事项或模板不存在');
     }
 
     /* ======== Pet ======== */

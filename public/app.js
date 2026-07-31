@@ -657,21 +657,34 @@
 
   /* ---------------- 话术弹窗 ---------------- */
   var scriptModal = $('#scriptModal'), scriptItem = null;
+  // 生成话术：走 /api/scripts/generate —— 配置了 AI 就用 AI（结合提示词+对接人身份+事项上下文），
+  // 未配置则后端自动回退占位符规则。前端据 r.ai 标注来源。
+  async function genScript(it, tplId) {
+    var out = $('#scriptOut'), src = $('#scriptSource');
+    out.value = '念念正在斟酌…';
+    if (src) src.hidden = true;
+    try {
+      var r = await API.post('/api/scripts/generate', { itemId: it.id, tplId: tplId });
+      out.value = r.text || '';
+      if (src) { src.hidden = false; src.textContent = r.ai ? '· 由 AI 结合对接人身份与事项生成' : '· 本地规则（占位符）演示版，填入 API Key 后由 AI 生成'; src.classList.toggle('is-ai', !!r.ai); }
+    } catch (e) { out.value = ''; toast('生成失败', 'error'); }
+  }
+  function buildTplBtns(it, listEl, tpls) {
+    listEl.innerHTML = '';
+    tpls.forEach(function (t) {
+      var b = document.createElement('button');
+      b.textContent = t.name;
+      b.addEventListener('click', function () { genScript(it, t.id); });
+      listEl.appendChild(b);
+    });
+  }
   async function openScript(it) {
     scriptItem = it;
     $('#scriptForItem').textContent = '为「' + it.title + '」挑一句话术';
     $('#scriptOut').value = '';
+    if ($('#scriptSource')) $('#scriptSource').hidden = true;
     var tpls = await API.get('/api/templates');
-    var list = $('#scriptTplList'); list.innerHTML = '';
-    tpls.forEach(function (t) {
-      var b = document.createElement('button');
-      b.textContent = t.name;
-      b.addEventListener('click', async function () {
-        var r = await API.post('/api/render', { itemId: it.id, tplId: t.id });
-        $('#scriptOut').value = r.text || '';
-      });
-      list.appendChild(b);
-    });
+    buildTplBtns(it, $('#scriptTplList'), tpls);
     scriptModal.hidden = false;
   }
   // v2: 推进时直接给一句话术（按对接人 + 当前事项生成），可复制
@@ -679,20 +692,9 @@
     scriptItem = it;
     $('#scriptForItem').textContent = '「' + it.title + '」的话术';
     $('#scriptOut').value = text || '';
+    if ($('#scriptSource')) $('#scriptSource').hidden = true;
     // 也保留模板选择列表，方便换一句
-    var list = $('#scriptTplList');
-    API.get('/api/templates').then(function (tpls) {
-      list.innerHTML = '';
-      tpls.forEach(function (t) {
-        var b = document.createElement('button');
-        b.textContent = t.name;
-        b.addEventListener('click', async function () {
-          var r = await API.post('/api/render', { itemId: it.id, tplId: t.id });
-          $('#scriptOut').value = r.text || '';
-        });
-        list.appendChild(b);
-      });
-    });
+    API.get('/api/templates').then(function (tpls) { buildTplBtns(it, $('#scriptTplList'), tpls); });
     scriptModal.hidden = false;
   }
   $('#scriptClose').addEventListener('click', function () { scriptModal.hidden = true; });
