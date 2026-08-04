@@ -83,24 +83,28 @@ body {
   display: flex; flex-direction: column;
   position: relative;
 }
-/* 左上角：返回理念介绍（链接式芯片，克制不抢戏——不与下方 brand 视觉抢焦） */
-.sidebar-topicons { display: flex; align-items: center; gap: 6px; margin-bottom: 20px; }
+/* 左上角：返回理念介绍
+ * 彻底轻量化——不用边框、不用背景，做成纯文字链接（像高质量博客的"← 回首页"）
+ * 只靠 ← 箭头 + 柔和文字色，视觉重量近乎为零，让位给下方 brand */
+.sidebar-topicons { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; padding: 0 4px; }
 .sidebar-icon-btn {
-  display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto;
-  border: 1px solid var(--line-on-bg); background: transparent; cursor: pointer;
-  border-radius: 999px; padding: 6px 12px 6px 10px; color: var(--ink-soft-on-bg);
-  font-family: var(--font-body); font-size: 12.5px; letter-spacing: .2px; line-height: 1;
-  transition: color .18s var(--ease), border-color .18s var(--ease), background .18s var(--ease);
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  border: none; background: transparent; cursor: pointer;
+  padding: 4px 2px; margin: 0; color: var(--ink-faint-on-bg);
+  font-family: var(--font-body); font-size: 12px; letter-spacing: .3px; line-height: 1;
+  border-radius: 6px; /* 仅用于 focus-visible 环 */
+  transition: color .18s var(--ease);
 }
-.sidebar-icon-btn svg { flex: none; width: 14px; height: 14px; transition: transform .22s var(--ease); }
-.sidebar-icon-btn:hover {
-  background: var(--hover-warm);
-  color: var(--sage-deep);
-  border-color: var(--sage);
+.sidebar-icon-btn svg { flex: none; width: 12px; height: 12px; transition: transform .22s var(--ease); }
+.sidebar-icon-btn:hover { color: var(--sage-deep); }
+.sidebar-icon-btn:hover svg { transform: translateX(-3px); }
+.sidebar-icon-btn:active { color: var(--sage); }
+/* 方形图标变体（如夜间模式按钮）——保留一个隐约的边框，与文字链接区分 */
+.sidebar-icon-btn-sq {
+  flex: 0 0 auto; justify-content: center; padding: 6px; width: 28px; height: 28px;
+  border-radius: 8px; color: var(--ink-faint-on-bg);
 }
-.sidebar-icon-btn:hover svg { transform: translateX(-2px); }
-.sidebar-icon-btn:active { transform: translateY(1px); }
-.sidebar-icon-btn-sq { flex: 0 0 auto; justify-content: center; padding: 7px; width: 32px; height: 32px; border-radius: 999px; }
+.sidebar-icon-btn-sq:hover { background: var(--hover-warm); color: var(--sage-deep); }
 .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; padding: 0 6px; }
 .brand-avatar {
   width: 48px; height: 48px; border-radius: 14px; flex: none;
