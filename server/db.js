@@ -809,8 +809,12 @@ const Templates = {
       .replace(/\{事\}/g, it.title || '这件事');
     return { text, item: it.title, template: tpl.name };
   },
-  // AI 生成话术：以模板提示词(scorpion)为 system，结合事项 + 对接人身份为 user；
-  // 未配置 AI 或调用失败时，回退到占位符渲染。返回 { text, item, template, ai }。
+  // 生成话术的两条路径（互斥）：
+  //   · 接了 AI（aiSource=byo/ollama 且 Key 有效）→ 必须走 AI：以模板 scorpion 为 system，
+  //  结合事项 + 对接人身份为 user；调用失败时不静默降级，返回 error='ai_call_failed'
+  //     并附上占位符兜底文案（保证界面不空白），前端应明确提示用户检查配置。
+  //   · 未接 AI（aiSource 未设置 / local）→ 直接使用模板 body 做占位符替换（{对方}/{在等}/{事}），
+  //     返回 error='ai_not_configured' 供前端提示"填 Key 后可由 AI 生成"。
   async generate(owner, itemId, tplId, colleagueId) {
     const it = db.prepare('SELECT * FROM items WHERE id=? AND owner=?').get(itemId, owner);
     const tpl = db.prepare('SELECT * FROM templates WHERE id=? AND (builtin=1 OR owner=?)').get(tplId, owner);
@@ -820,6 +824,16 @@ const Templates = {
     // 未显式指定对接人时，按事项里的「对方」姓名自动匹配已有对接人，让其身份/人设进入提示词
     if (!colleague && it.person) colleague = db.prepare('SELECT * FROM colleagues WHERE owner=? AND name=?').get(owner, it.person);
     const fallback = Templates.render(owner, itemId, tplId) || { text: '', item: it.title, template: tpl.name };
+
+    const s = Settings.get(owner);
+    const aiEnabled = s.aiSource && s.aiSource !== 'local' && (s.apiKey || s.aiSource === 'ollama');
+
+    // 未接 AI：直接用预设模板句子（占位符替换）
+    if (!aiEnabled) {
+      return Object.assign(fallback, { ai: false, error: 'ai_not_configured' });
+ }
+
+    // 接了 AI：必须用提示词生成
     const sys = (tpl.scorpion && tpl.scorpion.trim())
       ? tpl.scorpion
       : '你是沟通话术助手，根据场景生成一句自然、得体、可直接发送的中文消息。';
@@ -829,7 +843,9 @@ const Templates = {
     if (colleague) user += '\n对接人身份：' + (colleague.role || '') + (colleague.persona ? '（' + colleague.persona + '）' : '') + '，关系：' + (colleague.relation || '');
     user += '\n请只输出一句可直接发送的话术，不要解释、不要加引号。';
     const ai = await callAI(owner, sys, user);
-    return ai ? { text: ai, item: it.title, template: tpl.name, ai: true } : Object.assign(fallback, { ai: false });
+    if (ai) return { text: ai, item: it.title, template: tpl.name, ai: true };
+  // AI 已启用但调用失败：不静默降级——返回 error 让前端提示用户检查配置
+return Object.assign(fallback, { ai: false, error: 'ai_call_failed' });
   },
   // 「推一下」自动话术：无需用户选模板。依据事项(对方/下一步/在等) + 对接人已填描述与已存话术，
   // 有 AI 就让 AI 直接生成；没填对接人描述/话术模板时也能自主生成一句。返回 { text, ai, source }。

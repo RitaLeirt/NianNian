@@ -739,16 +739,33 @@ var tmp = dp[j];
       return true;
     } catch (e) { toast('操作失败，请重试', 'error'); return false; }
   }
-  // 生成话术：走 /api/scripts/generate —— 配置了 AI 就用 AI（结合提示词+对接人身份+事项上下文），
-  // 未配置则后端自动回退占位符规则。前端据 r.ai 标注来源。
+  // 生成话术：走 /api/scripts/generate
+  //   · 接了 AI：以模板 scorpion 提示词 + 事项 + 对接人 → 由 AI 生成
+  //   · 未接 AI：直接用模板预设句子（body 占位符替换）
+  //   · AI 调用失败：明确提示用户去检查配置（不再静默降级）
   async function genScript(it, tplId) {
     var out = $('#scriptOut'), src = $('#scriptSource');
     out.value = '念念正在斟酌…';
     if (src) src.hidden = true;
     try {
       var r = await API.post('/api/scripts/generate', { itemId: it.id, tplId: tplId });
-      out.value = r.text || '';
-      if (src) { src.hidden = false; src.textContent = r.ai ? '· 由 AI 结合对接人身份与事项生成' : '· 本地规则（占位符）演示版，填入 API Key 后由 AI 生成'; src.classList.toggle('is-ai', !!r.ai); }
+out.value = r.text || '';
+  if (src) {
+        src.hidden = false;
+        src.classList.toggle('is-ai', !!r.ai);
+        if (r.ai) {
+ src.textContent = '· 由 AI 结合对接人身份与事项生成';
+        } else if (r.error === 'ai_call_failed') {
+ src.innerHTML = '· 已用预设模板兜底 — AI 调用失败，请检查 <a href="#" id="scriptGoAiFix" style="color:var(--sage);text-decoration:underline">Key / 地址</a>';
+          var goAiFix = src.querySelector('#scriptGoAiFix');
+     if (goAiFix) goAiFix.addEventListener('click', function (e) { e.preventDefault(); scriptModal.hidden = true; switchView('ai'); });
+        } else {
+          // ai_not_configured：直接用预设模板句子
+       src.innerHTML = '· 用了预设模板句子 — <a href="#" id="scriptGoAi2" style="color:var(--sage);text-decoration:underline">填 API Key</a> 后由 AI 结合提示词生成';
+          var goAi2 = src.querySelector('#scriptGoAi2');
+   if (goAi2) goAi2.addEventListener('click', function (e) { e.preventDefault(); scriptModal.hidden = true; switchView('ai'); });
+      }
+      }
     } catch (e) { out.value = ''; toast('生成失败', 'error'); }
   }
   function buildTplBtns(it, listEl, tpls) {
