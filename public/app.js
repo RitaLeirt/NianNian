@@ -1561,34 +1561,90 @@ scriptItem = it;
     $('#aiCfgBase').hidden = !(byo || ollama);
     $('#aiCfgModel').hidden = !(byo || ollama);
   }
+  // 全站 AI 状态缓存：sidebar 顶部指示灯 + 各处功能按需查询
+  var aiStatusCache = { connected: false, source: 'local', model: '' };
+  async function refreshAiStatus() {
+    try {
+      var s = await API.get('/api/settings');
+      var src = s.aiSource || 'local';
+   var hasKey = !!(s.apiKey && s.apiKey.trim());
+      // 判定：byo 必须有 Key；ollama 只要选了就算接入（可无 Key）；local 视为未接入
+      var connected = (src === 'byo' && hasKey) || src === 'ollama';
+      aiStatusCache = { connected: connected, source: src, model: s.model || '' };
+    } catch (e) { aiStatusCache = { connected: false, source: 'local', model: '' }; }
+    renderAiStatusDot();
+  }
+  function renderAiStatusDot() {
+    var el = $('#aiStatusDot'); if (!el) return;
+    var st = aiStatusCache;
+    el.classList.toggle('is-on', st.connected);
+   el.classList.toggle('is-off', !st.connected);
+    var srcName = st.source === 'byo' ? (st.model || 'AI') : st.source === 'ollama' ? 'Ollama' : '未接入';
+ el.setAttribute('title', st.connected ? ('AI 已接入 · ' + srcName + '，点击查看设置') : '未接入 AI（用本地规则演示）· 点击去开启');
+    var label = el.querySelector('.ai-status-txt');
+    if (label) label.textContent = st.connected ? 'AI · 已接入' : 'AI · 未接入';
+  }
+
   async function loadAISettings() {
     try {
       var s = await API.get('/api/settings');
       var src = s.aiSource || 'local';
-      var radios = document.querySelectorAll('input[name="aisrc"]');
+   var radios = document.querySelectorAll('input[name="aisrc"]');
       radios.forEach(function (r) { r.checked = (r.value === src); });
       if (s.apiKey) $('#aiApiKey').value = s.apiKey;
       if (s.apiBase) $('#aiBase').value = s.apiBase;
       if (s.model) $('#aiModel').value = s.model;
       syncAiCfgVisibility(src);
-    } catch (e) {}
+      renderAiStatusDot();
+} catch (e) {}
   }
+
+  // 统一收集 + 保存当前 AI 表单状态。所有输入/切换事件都调用它，避免用户漏点"保存"。
+  var aiSaveTimer = null;
+  function collectAIPayload() {
+    var src = (document.querySelector('input[name="aisrc"]:checked') || {}).value || 'local';
+  var payload = { aiSource: src, apiKey: '', apiBase: '', model: '' };
+ if (src === 'byo') {
+   payload.apiKey = $('#aiApiKey').value.trim();
+      payload.apiBase = $('#aiBase').value.trim();
+   payload.model = $('#aiModel').value.trim();
+ } else if (src === 'ollama') {
+      payload.apiBase = $('#aiBase').value.trim() || 'http://localhost:11434/v1';
+    payload.model = $('#aiModel').value.trim() || 'llama3';
+    }
+    return payload;
+  }
+  async function autoSaveAI(silent) {
+try {
+      await API.put('/api/settings', collectAIPayload());
+      if (!silent) toast('AI 设置已保存');
+   refreshAiStatus();
+   } catch (e) { if (!silent) toast('保存失败', 'error'); }
+  }
+  function debouncedAutoSaveAI() {
+    clearTimeout(aiSaveTimer);
+    aiSaveTimer = setTimeout(function () { autoSaveAI(true); }, 500);
+  }
+
+  // 单选切换来源：立即保存（并静默）
   document.querySelectorAll('input[name="aisrc"]').forEach(function (r) {
-    r.addEventListener('change', function () { syncAiCfgVisibility(this.value); });
+    r.addEventListener('change', function () {
+  syncAiCfgVisibility(this.value);
+ autoSaveAI(true);
+    });
   });
-  // 填写 API Key 时自动切换到 BYO 来源，避免用户填了 key 但来源仍停在「本地规则」
+  // 填写 API Key 时自动切换到 BYO 来源；输入过程用 debounce 静默保存，避免每次按键都请求
   $('#aiApiKey').addEventListener('input', function () {
     var byo = document.querySelector('input[name="aisrc"][value="byo"]');
     if (byo && !byo.checked) { byo.checked = true; syncAiCfgVisibility('byo'); }
+    debouncedAutoSaveAI();
   });
-  $('#aiSave').addEventListener('click', async function () {
-    var src = (document.querySelector('input[name="aisrc"]:checked') || {}).value || 'local';
-    var payload = { aiSource: src };
-    if (src === 'byo') { payload.apiKey = $('#aiApiKey').value.trim(); payload.apiBase = $('#aiBase').value.trim(); payload.model = $('#aiModel').value.trim(); }
-    if (src === 'ollama') { payload.apiBase = $('#aiBase').value.trim() || 'http://localhost:11434/v1'; payload.model = $('#aiModel').value.trim() || 'llama3'; }
-    try { await API.put('/api/settings', payload); toast('AI 设置已保存'); }
-    catch (e) { toast('保存失败', 'error'); }
-  });
+  $('#aiApiKey').addEventListener('blur', function () { autoSaveAI(true); });
+  // Base URL 与模型名：blur 时静默保存
+  $('#aiBase').addEventListener('blur', function () { autoSaveAI(true); });
+  $('#aiModel').addEventListener('blur', function () { autoSaveAI(true); });
+  // 保存按钮保留：点一下给明确 toast 反馈"已保存"
+  $('#aiSave').addEventListener('click', function () { autoSaveAI(false); });
 
   /* ---------------- 视图切换 ---------------- */
   var PANES = {
@@ -1607,9 +1663,12 @@ scriptItem = it;
     else if (view === 'contacts') loadContacts();
     else if (view === 'journal') loadJournal();
     else if (view === 'petsettings') loadPetSettings();
-    else if (view === 'ai') { loadTokenPanel(); loadWorkspaceRecords(); }
+    else if (view === 'ai') { loadTokenPanel(); loadWorkspaceRecords(); loadAISettings(); refreshAiStatus(); }
   }
   $$('.nav-item').forEach(function (b) { b.addEventListener('click', function () { switchView(b.getAttribute('data-view')); }); });
+  // AI 状态灯：点一下直达设置
+  var aiStatusBtn = $('#aiStatusDot');
+  if (aiStatusBtn) aiStatusBtn.addEventListener('click', function () { switchView('ai'); });
 
   /* 沟通对象：子标签（对接人 / 话术库） */
   var contactsSub = 'people';
@@ -2022,8 +2081,8 @@ scriptItem = it;
     window.scrollTo({ top: 0, behavior: 'auto' });
     if (toApp && !appStarted) {
       appStarted = true;
-      tokenReady.then(function () { switchView('board'); });
-    } else if (toApp) { loadBoard(); }
+      tokenReady.then(function () { switchView('board'); refreshAiStatus(); });
+    } else if (toApp) { loadBoard(); refreshAiStatus(); }
     // 进入工作台后主动巡检一次：桌宠依据看板数据冒出「推一下」建议（延迟等看板加载完）
     if (toApp && pet && pet.patrol) setTimeout(function () { pet.patrol(); }, 1400);
   }

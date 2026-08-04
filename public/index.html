@@ -235,13 +235,17 @@
   <div class="layout">
     <!-- ============ 左侧边栏 ============ -->
     <aside class="sidebar">
-      <!-- 左上角：理念介绍 -->
+  <!-- 左上角：理念介绍 + AI 状态灯（微小指示，点一下跳到"账户与令牌"里的 AI 设置） -->
       <div class="sidebar-topicons">
-        <button class="sidebar-icon-btn" data-page="landing" title="理念介绍">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-          <span>理念介绍</span>
+     <button class="sidebar-icon-btn" data-page="landing" title="理念介绍">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+<span>理念介绍</span>
         </button>
-      </div>
+        <button id="aiStatusDot" class="ai-status is-off" data-view="ai" type="button" title="AI 状态">
+          <span class="ai-status-led" aria-hidden="true"></span>
+      <span class="ai-status-txt">AI · 未接入</span>
+        </button>
+  </div>
 
       <button class="brand brand-btn" data-page="landing" title="回到理念介绍">
         <div class="brand-avatar" id="brandAvatar" aria-hidden="true"><img src="assets/logo.svg" alt="" style="width:100%;height:100%;border-radius:14px;display:block;" /></div>

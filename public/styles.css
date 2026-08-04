@@ -86,7 +86,7 @@ body {
 /* 左上角：返回理念介绍
  * 彻底轻量化——不用边框、不用背景，做成纯文字链接（像高质量博客的"← 回首页"）
  * 只靠 ← 箭头 + 柔和文字色，视觉重量近乎为零，让位给下方 brand */
-.sidebar-topicons { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; padding: 0 4px; }
+.sidebar-topicons { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; padding: 0 4px; }
 .sidebar-icon-btn {
   display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
   border: none; background: transparent; cursor: pointer;
@@ -105,6 +105,34 @@ body {
   border-radius: 8px; color: var(--ink-faint-on-bg);
 }
 .sidebar-icon-btn-sq:hover { background: var(--hover-warm); color: var(--sage-deep); }
+
+/* AI 接入状态指示灯：一颗小 LED + 极小标签，与"理念介绍"链接同一克制层级
+ * ── 已接入：sage 呼吸光晕；未接入：中性灰点
+ * ── 点击直达"账户与令牌"设置页 */
+.ai-status {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  border: none; background: transparent; cursor: pointer;
+  padding: 4px 6px; margin: 0; border-radius: 999px;
+  font-family: var(--font-body); font-size: 11px; letter-spacing: .3px; line-height: 1;
+  color: var(--ink-faint-on-bg);
+  transition: color .18s var(--ease), background .18s var(--ease);
+}
+.ai-status .ai-status-led {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--ink-faint-on-bg);
+  transition: background .18s var(--ease), box-shadow .3s var(--ease);
+}
+.ai-status.is-on { color: var(--sage-deep); }
+.ai-status.is-on .ai-status-led {
+  background: var(--sage);
+  box-shadow: 0 0 0 2px rgba(127,160,133,.18);
+  animation: aiPulse 2.4s var(--ease) infinite;
+}
+.ai-status:hover { background: var(--hover-warm); color: var(--sage-deep); }
+@keyframes aiPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(127,160,133,.18); }
+  50%      { box-shadow: 0 0 0 4px rgba(127,160,133,.08); }
+}
 .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; padding: 0 6px; }
 .brand-avatar {
   width: 48px; height: 48px; border-radius: 14px; flex: none;
@@ -931,6 +959,8 @@ body {
 @media (max-width: 380px) {
   .brand-text h1 { display: none; }
   .board-h1 { font-size: 21px; }
+  .ai-status .ai-status-txt { display: none; }
+  .ai-status { padding: 4px; }
 }
 
 /* 全站细滚动条：暖色调、克制不抢戏 */
