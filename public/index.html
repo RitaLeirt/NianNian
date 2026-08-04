@@ -308,7 +308,7 @@
                 <option value="stuck">双向卡住</option>
               </select>
             </label>
-            <label class="parse-chip"><span class="k">对方</span><span class="k-optional">留空=自我提醒</span><input id="pPerson" placeholder="可不填" /></label>
+         <label class="parse-chip"><span class="k">对方</span><span class="k-optional">留空=自我提醒</span><input id="pPerson" list="personDatalistOptions" placeholder="选已有 / 输入新名" /></label>
             <label class="parse-chip"><span class="k">在等</span><input id="pWaiting" placeholder="——" /></label>
             <label class="parse-chip"><span class="k">下一步</span><input id="pNext" placeholder="跟进" /></label>
             <label class="parse-chip"><span class="k">DDL</span><input id="pDate" type="date" /></label>
@@ -680,7 +680,7 @@
             </select>
           </label>
         </div>
-        <label>对方 <span class="k-optional">留空=自我提醒</span> <input id="editPerson" placeholder="可不填" /></label>
+   <label>对方 <span class="k-optional">留空=自我提醒</span> <input id="editPerson" list="personDatalistOptions" placeholder="选已有 / 输入新名" /></label>
         <label>在等 <input id="editWaiting" placeholder="——" /></label>
         <label>下一步 <input id="editNext" placeholder="跟进" /></label>
         <label>DDL <input id="editDate" type="date" /></label>
@@ -924,6 +924,9 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- 共享对接人自动补全：所有"对方"输入框都通过 list="personDatalistOptions" 引用这个 -->
+  <datalist id="personDatalistOptions"></datalist>
 
   <script src="/pet.js"></script>
   <script src="/app.js"></script>

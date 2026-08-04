@@ -137,14 +137,86 @@
   async function populatePersonFilter() {
     var sel = $('#filterPerson'); if (!sel) return;
     try {
-      if (!personFilterCache) personFilterCache = (await API.get('/api/colleagues')).items;
+ if (!personFilterCache) personFilterCache = (await API.get('/api/colleagues')).items;
       var cur = sel.value;
-      sel.innerHTML = '<option value="">全部对方</option>' + personFilterCache.map(function (c) {
-        return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>';
-      }).join('');
-      sel.value = personFilterCache.some(function (c) { return c.name === cur; }) ? cur : (cur === '' ? '' : cur);
+  sel.innerHTML = '<option value="">全部对方</option>' + personFilterCache.map(function (c) {
+    return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>';
+    }).join('');
+ sel.value = personFilterCache.some(function (c) { return c.name === cur; }) ? cur : (cur === '' ? '' : cur);
+      // 每次刷新筛选下拉时，同步刷新"对方"共享 datalist（所有事项添加/编辑处都用这个自动补全）
+      refreshPersonDatalist();
     } catch (e) { /* 静默 */ }
   }
+
+  /* ---- 对方（对接人）共享补全 + 模糊匹配确认 ------------------------------------------------
+   * 场景：记一笔浮层 / 编辑事项弹窗 / 桌宠一句话添加，都是"允许用户从已有对接人里选，也允许输入新的"。
+   * 用户输入新名字时，先跟已有对接人做一次模糊匹配（大小写忽略/子串包含/编辑距离≤1），
+   * 若命中相似项则弹确认框；否则按用户输入原样新建（后端 findOrCreate 会自动归档）。
+   * -------------------------------------------------------------------------------------- */
+  async function getContactNames() {
+    if (!personFilterCache) {
+      try { personFilterCache = (await API.get('/api/colleagues')).items || []; }
+      catch (e) { personFilterCache = []; }
+    }
+    return personFilterCache.map(function (c) { return c.name; });
+  }
+  async function refreshPersonDatalist() {
+ var names = await getContactNames();
+    var dl = $('#personDatalistOptions');
+    if (!dl) return;
+    dl.innerHTML = names.map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join('');
+  }
+  function editDistance(a, b) {
+    a = a || ''; b = b || '';
+    if (a === b) return 0;
+    var m = a.length, n = b.length;
+    if (!m || !n) return m || n;
+    var dp = []; for (var j = 0; j <= n; j++) dp[j] = j;
+    for (var i = 1; i <= m; i++) {
+      var prev = dp[0]; dp[0] = i;
+      for (var j = 1; j <= n; j++) {
+var tmp = dp[j];
+        dp[j] = a.charAt(i - 1) === b.charAt(j - 1) ? prev : Math.min(prev, dp[j], dp[j - 1]) + 1;
+        prev = tmp;
+      }
+    }
+    return dp[n];
+  }
+  function fuzzyMatchName(input, names) {
+    var q = (input || '').trim();
+    if (!q || !names || !names.length) return null;
+    var qL = q.toLowerCase();
+    // 1. 完全一致（大小写忽略）
+    for (var i = 0; i < names.length; i++) {
+      if (names[i].toLowerCase() === qL) return { candidate: names[i], kind: 'exact' };
+    }
+    // 2. 子串包含（任一方向）
+    for (var i = 0; i < names.length; i++) {
+      var nL = names[i].toLowerCase();
+   if (nL.indexOf(qL) >= 0 || qL.indexOf(nL) >= 0) return { candidate: names[i], kind: 'similar' };
+    }
+    // 3. 短名字的编辑距离 ≤1
+    if (q.length <= 6) {
+      for (var i = 0; i < names.length; i++) {
+ var n = names[i];
+        if (n.length <= 8 && editDistance(n, q) <= 1) return { candidate: n, kind: 'similar' };
+      }
+    }
+    return null;
+  }
+  // 输入名字 → 解析出最终采用的名字。相似但不完全一致时会弹确认。
+  async function resolvePersonInput(name) {
+    var q = (name || '').trim();
+    if (!q) return { name: '', isNew: false };
+    var names = await getContactNames();
+    var m = fuzzyMatchName(q, names);
+    if (!m) return { name: q, isNew: true }; // 无相似项：直接按输入新建
+    if (m.kind === 'exact') return { name: m.candidate, isNew: false };
+    var ok = await confirm('沟通对象里已经有「' + m.candidate + '」，你说的是 ta 吗？点「确认」就用「' + m.candidate + '」；点「取消」按你输入的「' + q + '」新建一个对接人。');
+    return ok ? { name: m.candidate, isNew: false } : { name: q, isNew: true };
+  }
+  // 让新建/切换对接人后，共享补全能立刻拿到新数据
+  function invalidatePersonCache() { personFilterCache = null; }
   function updateFilterResetVisibility() {
     $('#filterReset').hidden = !(state.filterUrgency || state.filterPerson);
   }
@@ -373,14 +445,18 @@
   $('#parseSave').addEventListener('click', async function () {
     var ddl = null, ddlLabel = '';
     if (pDate.value) { var d = new Date(pDate.value + 'T00:00:00'); ddl = d.getTime(); ddlLabel = (d.getMonth() + 1) + '月' + d.getDate() + '日'; }
+    // 对方：从已有对接人里模糊匹配；相似但不同名则弹确认；无相似则按输入新建
+    var resolved = await resolvePersonInput(pPerson.value);
     // 不填对方 = 自我提醒，球默认在我方；有对方则默认球在对方
-    var who = pWho.value || (pPerson.value.trim() ? 'theirs' : 'mine');
+    var who = pWho.value || (resolved.name ? 'theirs' : 'mine');
     var body = {
       title: noteInput.value.trim().slice(0, 20) || '未命名的事',
-      who: who, person: pPerson.value.trim(), waiting: pWaiting.value,
+      who: who, person: resolved.name, waiting: pWaiting.value,
       next_step: pNext.value, ddl: ddl, ddl_label: ddlLabel, priority: pPriority.value,
     };
     await API.post('/api/items', body);
+    // 后端 findOrCreate 可能刚建新对接人 → 让下拉/补全下次拿最新
+    if (resolved.isNew) invalidatePersonCache();
     parsePanel.hidden = true; noteInput.value = '';
     toast('记下了'); pet.react(body.who === 'mine' ? 'happy' : 'waving');
     loadBoard();
@@ -794,6 +870,8 @@ scriptItem = it;
     $('#editWaiting').value = it.waiting || '';
     $('#editNext').value = it.next_step || '';
     $('#editDate').value = it.ddl ? toDateInput(it.ddl) : '';
+    // 打开时确保对接人 datalist 是最新的
+    refreshPersonDatalist();
     editModal.hidden = false;
   }
   $('#editForm').addEventListener('submit', async function (e) {
@@ -801,13 +879,16 @@ scriptItem = it;
     var ddl = null, ddlLabel = '';
     var dateVal = $('#editDate').value;
     if (dateVal) { var d = new Date(dateVal + 'T00:00:00'); ddl = d.getTime(); ddlLabel = (d.getMonth() + 1) + '月' + d.getDate() + '日'; }
+    // 对方：从已有对接人里模糊匹配；相似但不同名则弹确认；无相似则按输入新建
+    var resolved = await resolvePersonInput($('#editPerson').value);
     var body = {
       title: $('#editTitle').value.trim(), who: $('#editWho').value, priority: $('#editPriority').value,
-      person: $('#editPerson').value.trim(), waiting: $('#editWaiting').value.trim(), next_step: $('#editNext').value.trim(),
-      ddl: ddl, ddl_label: ddlLabel,
+ person: resolved.name, waiting: $('#editWaiting').value.trim(), next_step: $('#editNext').value.trim(),
+ ddl: ddl, ddl_label: ddlLabel,
     };
     try {
       await API.patch('/api/items/' + editingItemId, body);
+      if (resolved.isNew) invalidatePersonCache();
       editModal.hidden = true; toast('已保存'); loadBoard();
     } catch (e) { toast('保存失败', 'error'); }
   });
@@ -1711,12 +1792,20 @@ scriptItem = it;
         // 有图无字：给个占位标题，图片作为线索（本地演示：仅记数量）
         var seed = text || (feedImages.length ? '（截图）待念念看图记下的一件事' : '');
         var parsed = await API.post('/api/parse', { text: seed });
-        var titleBase = text || '看图记一笔';
-        await API.post('/api/items', {
-          title: (parsed.title || titleBase).slice(0, 20), who: parsed.who,
-          person: parsed.person, waiting: parsed.waiting, next_step: parsed.next_step,
-          ddl: parsed.ddl, ddl_label: parsed.ddl_label, priority: parsed.priority,
+        // 对方：若解析出人名，用共享模糊匹配确认（可复用已有对接人 / 新建）
+      var resolvedPerson = parsed.person || '';
+     var isNewContact = false;
+        if (resolvedPerson) {
+          var r = await resolvePersonInput(resolvedPerson);
+          resolvedPerson = r.name; isNewContact = r.isNew;
+        }
+  var titleBase = text || '看图记一笔';
+  await API.post('/api/items', {
+   title: (parsed.title || titleBase).slice(0, 20), who: parsed.who,
+          person: resolvedPerson, waiting: parsed.waiting, next_step: parsed.next_step,
+      ddl: parsed.ddl, ddl_label: parsed.ddl_label, priority: parsed.priority,
         });
+        if (isNewContact) invalidatePersonCache();
         react('happy', 2000);
         setYarn('unspool', 2200);
         var hadImg = feedImages.length;
