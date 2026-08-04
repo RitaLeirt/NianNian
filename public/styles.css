@@ -83,16 +83,24 @@ body {
   display: flex; flex-direction: column;
   position: relative;
 }
-/* 左上角：理念介绍 + 夜间模式（扁平图标行，克制不抢戏） */
-.sidebar-topicons { display: flex; align-items: center; gap: 6px; margin-bottom: 18px; }
+/* 左上角：返回理念介绍（链接式芯片，克制不抢戏——不与下方 brand 视觉抢焦） */
+.sidebar-topicons { display: flex; align-items: center; gap: 6px; margin-bottom: 20px; }
 .sidebar-icon-btn {
-  display: flex; align-items: center; gap: 6px; flex: 1;
+  display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto;
   border: 1px solid var(--line-on-bg); background: transparent; cursor: pointer;
-  border-radius: 11px; padding: 7px 10px; color: var(--ink-soft-on-bg);
-  font-family: var(--font-body); font-size: 12.5px; transition: background .15s, color .15s, border-color .15s;
+  border-radius: 999px; padding: 6px 12px 6px 10px; color: var(--ink-soft-on-bg);
+  font-family: var(--font-body); font-size: 12.5px; letter-spacing: .2px; line-height: 1;
+  transition: color .18s var(--ease), border-color .18s var(--ease), background .18s var(--ease);
 }
-.sidebar-icon-btn:hover { background: rgba(127,160,133,.14); color: var(--ink-on-bg); border-color: var(--sage); }
-.sidebar-icon-btn-sq { flex: 0 0 auto; justify-content: center; padding: 7px; width: 34px; }
+.sidebar-icon-btn svg { flex: none; width: 14px; height: 14px; transition: transform .22s var(--ease); }
+.sidebar-icon-btn:hover {
+  background: var(--hover-warm);
+  color: var(--sage-deep);
+  border-color: var(--sage);
+}
+.sidebar-icon-btn:hover svg { transform: translateX(-2px); }
+.sidebar-icon-btn:active { transform: translateY(1px); }
+.sidebar-icon-btn-sq { flex: 0 0 auto; justify-content: center; padding: 7px; width: 32px; height: 32px; border-radius: 999px; }
 .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; padding: 0 6px; }
 .brand-avatar {
   width: 48px; height: 48px; border-radius: 14px; flex: none;
