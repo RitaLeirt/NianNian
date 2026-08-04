@@ -1645,6 +1645,37 @@ try {
   $('#aiModel').addEventListener('blur', function () { autoSaveAI(true); });
   // 保存按钮保留：点一下给明确 toast 反馈"已保存"
   $('#aiSave').addEventListener('click', function () { autoSaveAI(false); });
+  // 一键测试连接：真实发一次调用，把 status/hint/latency 展示出来（把"看不见的错误"暴露到界面）
+  $('#aiTest').addEventListener('click', async function () {
+    var btn = this, resultRow = $('#aiTestResult'), body = $('#aiTestBody');
+    // 先把当前表单状态存下，避免用户改了但没触发 blur
+    await autoSaveAI(true);
+    resultRow.hidden = false;
+    body.textContent = '念念正在拨号…';
+    body.className = 'ai-fallback ai-test-pending';
+    btn.disabled = true;
+    try {
+   var r = await API.post('/api/settings/test-ai', {});
+   if (r && r.ok) {
+        body.className = 'ai-fallback ai-test-ok';
+        body.innerHTML = '✓ 连接成功 · 模型 <b>' + esc(r.model || '') + '</b> · 耗时 ' + (r.latency_ms || 0) + 'ms';
+      refreshAiStatus();
+} else {
+      body.className = 'ai-fallback ai-test-fail';
+        var lines = [];
+        lines.push('✗ ' + (r && r.hint ? esc(r.hint) : '调用失败'));
+        if (r && r.status) lines.push('HTTP ' + r.status + ' · ' + (r.error || ''));
+        if (r && r.body) lines.push('接口返回: ' + esc(r.body));
+        if (r && r.latency_ms) lines.push('耗时 ' + r.latency_ms + 'ms');
+      body.innerHTML = lines.join('<br>');
+        refreshAiStatus();
+    }
+    } catch (e) {
+      body.className = 'ai-fallback ai-test-fail';
+    body.textContent = '✗ 请求出错：' + (e && e.message ? e.message : '未知');
+    }
+    btn.disabled = false;
+  });
 
   /* ---------------- 视图切换 ---------------- */
   var PANES = {

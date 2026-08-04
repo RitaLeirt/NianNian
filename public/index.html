@@ -591,10 +591,16 @@
               <li><b>话术库生成话术</b>：根据模板提示词 + 对接人身份 + 事项上下文，生成自然话术，而非仅靠占位符替换。</li>
             </ul>
           </div>
-          <div class="set-row" style="justify-content:flex-end">
-            <button id="aiSave" class="btn btn-primary btn-sm">保存 AI 设置</button>
+                 <!-- 测试连接结果行（默认隐藏，点了"测试连接"才展示；成功 sage 底、失败琥珀底 + 具体诊断 hint） -->
+     <div class="set-row ai-test-result" id="aiTestResult" hidden>
+  <div class="set-label"><b>连接诊断</b><span>最近一次调用的真实反馈</span></div>
+    <div id="aiTestBody" class="ai-fallback"></div>
           </div>
-        </div>
+          <div class="set-row" style="justify-content:flex-end; gap:8px;">
+      <button id="aiTest" class="btn btn-ghost btn-sm" type="button">测试连接</button>
+    <button id="aiSave" class="btn btn-primary btn-sm">保存 AI 设置</button>
+      </div>
+      </div>
 
         <!-- 工作区记录 -->
         <div class="settings-card" style="margin-top:16px">

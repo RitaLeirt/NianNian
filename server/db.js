@@ -177,10 +177,23 @@ const Settings = {
  * 未配置或调用失败均返回 null，调用方据此回退本地规则。
  * ============================================================ */
 async function callAI(owner, system, user) {
+  const r = await callAIRaw(owner, system, user);
+  return r.text || null;
+}
+
+// 底层实现：把每一次调用的成败/状态码/错误信息都完整返回，方便前端"测试连接"给出可行动的错误提示。
+// 结果同时缓存在 lastAIStatus，供 /api/settings/status 读取（诊断用途）。
+const lastAIStatus = new Map(); // owner -> { ok, status, error, latency_ms, at }
+async function callAIRaw(owner, system, user) {
   const s = Settings.get(owner);
   const source = s.aiSource;
-  if (!source || source === 'local') return null; // 本地规则：不调用
-  let baseUrl, apiKey, model, path;
+  const started = Date.now();
+  if (!source || source === 'local') {
+    const st = { ok: false, error: 'not_configured', hint: '未接入 AI，用了本地规则' };
+    lastAIStatus.set(owner, Object.assign({ at: started }, st));
+    return Object.assign({ text: null }, st);
+  }
+  let baseUrl, apiKey, model;
   if (source === 'byo') {
     baseUrl = (s.apiBase || 'https://api.openai.com/v1').replace(/\/$/, '');
     apiKey = s.apiKey || '';
@@ -190,12 +203,16 @@ async function callAI(owner, system, user) {
     apiKey = s.apiKey || 'ollama';
     model = s.model || 'llama3';
   } else {
-    return null;
+    const st = { ok: false, error: 'unknown_source', hint: 'aiSource 未知: ' + source };
+  lastAIStatus.set(owner, Object.assign({ at: started }, st));
+ return Object.assign({ text: null }, st);
   }
-  if (!apiKey || (apiKey === 'ollama' && source === 'ollama')) {
-    // ollama 可无 key；byo 无 key 则跳过
-    if (source === 'byo') return null;
+  if (source === 'byo' && !apiKey) {
+    const st = { ok: false, error: 'no_api_key', hint: '选了 BYO 但没填 API Key' };
+    lastAIStatus.set(owner, Object.assign({ at: started }, st));
+    return Object.assign({ text: null }, st);
   }
+
   const url = baseUrl + '/chat/completions';
   try {
     const ctrl = new AbortController();
@@ -204,17 +221,48 @@ async function callAI(owner, system, user) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
       body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], temperature: 0.7 }),
-      signal: ctrl.signal,
+   signal: ctrl.signal,
     });
     clearTimeout(to);
-    if (!r.ok) return null;
+    const latency = Date.now() - started;
+    if (!r.ok) {
+    let errText = '';
+      try { errText = await r.text(); } catch (e) {}
+      let hint = '';
+      if (r.status === 401 || r.status === 403) hint = 'API Key 无效或没有权限';
+  else if (r.status === 404) hint = '接口地址找不到，检查 Base URL 是否为 https://xxx/v1';
+      else if (r.status === 429) hint = '触发限流，稍后再试';
+   else if (r.status >= 500) hint = '供应商服务器出错（' + r.status + '），稍后再试';
+      else hint = '接口返回 ' + r.status;
+      const st = { ok: false, status: r.status, error: 'http_' + r.status, hint, body: (errText || '').slice(0, 300), latency_ms: latency };
+      lastAIStatus.set(owner, Object.assign({ at: started }, st));
+      console.warn('[callAI] fail', { owner, url, model, status: r.status, body: (errText || '').slice(0, 200) });
+      return Object.assign({ text: null }, st);
+    }
     const j = await r.json();
     const text = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
-    return text ? text.trim() : null;
+    if (!text) {
+ const st = { ok: false, error: 'empty_response', hint: '接口返回 200 但内容为空，检查模型名或响应格式', body: JSON.stringify(j).slice(0, 300), latency_ms: latency };
+lastAIStatus.set(owner, Object.assign({ at: started }, st));
+      return Object.assign({ text: null }, st);
+    }
+    const st = { ok: true, model, latency_ms: latency };
+    lastAIStatus.set(owner, Object.assign({ at: started }, st));
+    return Object.assign({ text: text.trim() }, st);
   } catch (e) {
-    return null;
+    const latency = Date.now() - started;
+  let hint = '';
+    if (e && e.name === 'AbortError') hint = '超时（>20s），可能是 Base URL 不可达';
+    else if (e && /ENOTFOUND|EAI_AGAIN/.test(String(e.message))) hint = 'Base URL 域名解析失败';
+    else if (e && /ECONNREFUSED|ECONNRESET/.test(String(e.message))) hint = '连不上 Base URL，检查地址';
+ else hint = '网络错误：' + (e && e.message ? e.message.slice(0, 120) : '未知');
+    const st = { ok: false, error: 'network', hint, latency_ms: latency };
+    lastAIStatus.set(owner, Object.assign({ at: started }, st));
+    console.warn('[callAI] exception', { owner, url, model, err: e && e.message });
+    return Object.assign({ text: null }, st);
   }
 }
+function getLastAIStatus(owner) { return lastAIStatus.get(owner) || null; }
 
 /* 兼容老库：缺列则补上 */
 const tplCols = db.prepare("PRAGMA table_info(templates)").all().map(c => c.name);
@@ -1090,4 +1138,4 @@ const Schedules = {
   },
 };
 
-module.exports = { db, DEFAULT_OWNER, Auth, seedFor, Parser, Items, Journal, Templates, Pet, Schedules, Colleagues, Settings, callAI, DAY };
+module.exports = { db, DEFAULT_OWNER, Auth, seedFor, Parser, Items, Journal, Templates, Pet, Schedules, Colleagues, Settings, callAI, callAIRaw, getLastAIStatus, DAY };

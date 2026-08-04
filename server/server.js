@@ -13,7 +13,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { Parser, Items, Journal, Templates, Pet, Schedules, Colleagues, Auth, DEFAULT_OWNER, seedFor, Settings, callAI } = require('./db');
+const { Parser, Items, Journal, Templates, Pet, Schedules, Colleagues, Auth, DEFAULT_OWNER, seedFor, Settings, callAI, callAIRaw, getLastAIStatus } = require('./db');
 
 const PORT = process.env.PORT || 8787;
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -137,10 +137,19 @@ async function handleApi(req, res, url) {
       return sendJSON(res, 200, { tokens: Auth.list() });
     }
     /* ---- AI / 工作区设置 ---- */
-    if (resource === 'settings') {
-      if (method === 'GET') return sendJSON(res, 200, Settings.get(owner));
-      if (method === 'PUT' || method === 'POST') {
-        const body = await readBody(req);
+  if (resource === 'settings') {
+      // POST /api/settings/test-ai：一键测试当前 AI 配置能不能通，返回详细诊断
+      if (method === 'POST' && seg[2] === 'test-ai') {
+        const r = await callAIRaw(owner, '你是助手，用一个词回答。', '请回复"通了"两个字。');
+   return sendJSON(res, 200, r);
+      }
+      // GET /api/settings/status：读最近一次 AI 调用状态（自动填充侧栏灯的 tooltip）
+      if (method === 'GET' && seg[2] === 'status') {
+        return sendJSON(res, 200, getLastAIStatus(owner) || { ok: null });
+      }
+      if (method === 'GET' && !seg[2]) return sendJSON(res, 200, Settings.get(owner));
+      if ((method === 'PUT' || method === 'POST') && !seg[2]) {
+  const body = await readBody(req);
         if (body === null) return sendError(res, 400, '无效的 JSON 请求体');
         return sendJSON(res, 200, Settings.set(owner, body));
       }
