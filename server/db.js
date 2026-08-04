@@ -192,7 +192,10 @@ async function callAI(owner, system, user) {
   } else {
     return null;
   }
-  if (!apiKey || apiKey === 'ollama' && source === 'ollama') { /* ollama 可无 key */ }
+  if (!apiKey || (apiKey === 'ollama' && source === 'ollama')) {
+    // ollama 可无 key；byo 无 key 则跳过
+    if (source === 'byo') return null;
+  }
   const url = baseUrl + '/chat/completions';
   try {
     const ctrl = new AbortController();
@@ -333,36 +336,48 @@ function seedFor(owner) {
   if (jrnCount === 0) {
     const ins = db.prepare('INSERT INTO journal (owner, ts, kind, text) VALUES (?,?,?,?)');
     const wk = weekEndingFriday(Date.now());
-    // 上一完整工作周（周一~周五）内的某天某时
-    const wd = (idx, h, m) => { const d = new Date(wk.weekStart); d.setDate(d.getDate() + idx); d.setHours(h, m, 0, 0); return d.getTime(); };
-    // 本周至今（相对今天）
-    const at = (daysAgo, h, m) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); d.setHours(h, m, 0, 0); return d.getTime(); };
+    // 说明：服务端可能部署在 UTC（Vercel）而用户浏览器为 CST，所以要按"CST 挂钟"意图生成时间戳。
+    // 做法：把毫秒 +8h 得到"CST 挂钟对应的 UTC 时刻"，用 setUTCHours 设定 h:m，再 −8h 得到真实 UTC ts。
+ const cstMs = (base, h, m) => {
+      const d = new Date(base + 8 * 3600000);
+      d.setUTCHours(h, m, 0, 0);
+    return d.getTime() - 8 * 3600000;
+    };
+    // 上一完整工作周（周一~周五）内的某天某时（按 CST 意图）
+    const wd = (idx, h, m) => cstMs(wk.weekStart + idx * DAY, h, m);
+    // 本周至今（相对今天，按 CST 意图）
+    const at = (daysAgo, h, m) => cstMs(Date.now() - daysAgo * DAY, h, m);
+    // 生成时防未来：避免任何种子条目落到"此刻之后"
+  const now = Date.now();
+    const past = (ts) => ts <= now ? ts : now - 60 * 1000; // 未来则贴到 1 分钟前
 
     // —— 上一完整工作周：周一~周五，丰富流水，构成「上一个周五的周报」——
-    ins.run(owner, wd(0, 9, 12), 'note', '记下：上线前评审会');
-    ins.run(owner, wd(0, 18, 40), 'push', '推进了一步：上线前评审会');
-    ins.run(owner, wd(1, 10, 30), 'note', '记下：报价后跟进');
-    ins.run(owner, wd(1, 15, 50), 'note', '记下：跨部门协同对齐');
-    ins.run(owner, wd(2, 9, 40), 'push', '推进了一步：客户合同签署');
-    ins.run(owner, wd(2, 14, 20), 'note', '记下：自由设计师尾款');
-    ins.run(owner, wd(3, 11, 0), 'note', '记下：供应商发货确认');
-    ins.run(owner, wd(3, 16, 45), 'push', '推进了一步：法务审阅合同条款');
-    ins.run(owner, wd(4, 10, 5), 'done', '这件事放下了：上线前评审会');
-    ins.run(owner, wd(4, 19, 30), 'done', '这件事放下了：合同盖章寄送');
+    ins.run(owner, past(wd(0, 9, 12)), 'note', '记下：上线前评审会');
+    ins.run(owner, past(wd(0, 18, 40)), 'push', '推进了一步：上线前评审会');
+    ins.run(owner, past(wd(1, 10, 30)), 'note', '记下：报价后跟进');
+    ins.run(owner, past(wd(1, 15, 50)), 'note', '记下：跨部门协同对齐');
+    ins.run(owner, past(wd(2, 9, 40)), 'push', '推进了一步：客户合同签署');
+    ins.run(owner, past(wd(2, 14, 20)), 'note', '记下：自由设计师尾款');
+    ins.run(owner, past(wd(3, 11, 0)), 'note', '记下：供应商发货确认');
+    ins.run(owner, past(wd(3, 16, 45)), 'push', '推进了一步：法务审阅合同条款');
+    ins.run(owner, past(wd(4, 10, 5)), 'done', '这件事放下了：上线前评审会');
+  ins.run(owner, past(wd(4, 19, 30)), 'done', '这件事放下了：合同盖章寄送');
     // 周报：落在那个周五 18:00，抬头带真实周范围
     ins.run(owner, wk.friTs, 'weekly',
       '【周报 · ' + wk.startStr + ' – ' + wk.endStr + '（周一至周五）】\n\n' +
       '■ 本周概览\n　　新记 4 件 · 推进 3 次 · 完结 2 件\n\n' +
-      '■ 已完成\n　　✓ 上线前评审会\n　　✓ 合同盖章寄送\n\n' +
+    '■ 已完成\n　　✓ 上线前评审会\n　　✓ 合同盖章寄送\n\n' +
       '■ 推进中\n　　→ 上线前评审会\n　　→ 客户合同签署\n　　→ 法务审阅合同条款\n\n' +
       '■ 新增待办\n　　· 报价后跟进\n　　· 跨部门协同对齐\n　　· 自由设计师尾款\n　　· 供应商发货确认\n\n' +
       '小结：这一周把手上的球稳步往前推了推，下周继续盯紧未完结的几件。');
 
     // —— 本周至今：几条近的流水（尚未到本周五，所以本周还没有周报）——
-    ins.run(owner, at(1, 9, 15), 'note', '记下：运营活动排期');
-    ins.run(owner, at(0, 8, 50), 'note', '记下：给老板发周报');
-    ins.run(owner, at(0, 10, 5), 'note', '记下：约面试候选人时间');
-    ins.run(owner, at(0, 13, 20), 'insight', '最近这段时间，念念记录到你推进过 4 次悬着的事——手上的球没有一直凉着，这是个好势头。');
+    // 只保留严格早于"此刻"的条目，避免出现 21:20 这种未来记录
+    ins.run(owner, past(at(1, 9, 15)), 'note', '记下：运营活动排期');
+    ins.run(owner, past(at(0, 8, 50)), 'note', '记下：给老板发周报');
+    ins.run(owner, past(at(0, 10, 5)), 'note', '记下：约面试候选人时间');
+    // 观察卡：使用相对时间（当前时刻的前 20 分钟），保证一定在过去
+    ins.run(owner, now - 20 * 60 * 1000, 'insight', '最近这段时间，念念记录到你推进过 4 次悬着的事——手上的球没有一直凉着，这是个好势头。');
   }
 
   const tplOwn = db.prepare('SELECT COUNT(*) c FROM templates WHERE owner=? AND builtin=0').get(owner).c;
@@ -648,7 +663,8 @@ const Items = {
  * Journal（日记本，按 owner 隔离）
  * ============================================================ */
 const Journal = {
-  list(owner) { return db.prepare('SELECT * FROM journal WHERE owner=? ORDER BY ts DESC').all(owner); },
+  // 兜底：过滤掉任何 ts>now 的"未来记录"——一旦历史数据/时区偏差留下了未来时间戳，前端也不会误显示为未来事件。
+  list(owner) { return db.prepare('SELECT * FROM journal WHERE owner=? AND ts<=? ORDER BY ts DESC').all(owner, Date.now()); },
   add(owner, kind, text) {
     const r = db.prepare('INSERT INTO journal (owner, ts, kind, text) VALUES (?,?,?,?)').run(owner, Date.now(), kind, text);
     return db.prepare('SELECT * FROM journal WHERE id=?').get(r.lastInsertRowid);
@@ -849,9 +865,12 @@ const Templates = {
     const ai = await callAI(owner, sys, user);
     if (ai) return { text: ai, ai: true, source: colleague ? 'ai+contact' : 'ai' };
 
-    // 无 AI 回退：优先用对接人已存话术 → 匹配模板 → 自主兜底生成
-    if (savedScript) return { text: fillPh(savedScript.body), ai: false, source: 'saved' };
-    if (tpl) return { text: fillPh(tpl.body), ai: false, source: 'template' };
+    // 无 AI 回退：优先用对接人已存话术 → 匹配模板 → 自主兜底生成。
+    // 同时标注回退原因，前端可据此提示用户检查 AI 配置。
+    const s = Settings.get(owner);
+    const reason = (!s.aiSource || s.aiSource === 'local') ? 'ai_not_configured' : 'ai_call_failed';
+    if (savedScript) return { text: fillPh(savedScript.body), ai: false, source: 'saved', error: reason };
+    if (tpl) return { text: fillPh(tpl.body), ai: false, source: 'template', error: reason };
     const auto = person + '你好，关于「' + it.title + '」'
       + (waiting ? '（还在等' + waiting + '）' : '')
       + (nextStep ? '，我这边下一步是「' + nextStep + '」' : '')

@@ -1434,6 +1434,11 @@
   document.querySelectorAll('input[name="aisrc"]').forEach(function (r) {
     r.addEventListener('change', function () { syncAiCfgVisibility(this.value); });
   });
+  // 填写 API Key 时自动切换到 BYO 来源，避免用户填了 key 但来源仍停在「本地规则」
+  $('#aiApiKey').addEventListener('input', function () {
+    var byo = document.querySelector('input[name="aisrc"][value="byo"]');
+    if (byo && !byo.checked) { byo.checked = true; syncAiCfgVisibility('byo'); }
+  });
   $('#aiSave').addEventListener('click', async function () {
     var src = (document.querySelector('input[name="aisrc"]:checked') || {}).value || 'local';
     var payload = { aiSource: src };
@@ -1546,11 +1551,22 @@
         scriptEl.textContent = (r && r.text) || '（没能生成，稍后再试）';
         if (srcEl) {
           srcEl.hidden = false;
-          srcEl.textContent = r && r.ai ? '· AI 依据对方与事项生成'
-            : (r && r.source === 'saved') ? '· 套用了 ta 的既有话术'
-            : (r && r.source === 'template') ? '· 套用了匹配模板'
-            : '· 念念自动拟的';
-          srcEl.classList.toggle('is-ai', !!(r && r.ai));
+          if (r && r.ai) {
+            srcEl.textContent = '· AI 依据对方与事项生成';
+            srcEl.classList.add('is-ai');
+          } else {
+            // AI 未启用或调用失败：提示用户去配置
+            var hint = (r && r.source === 'saved') ? '· 套用了 ta 的既有话术'
+              : (r && r.source === 'template') ? '· 套用了匹配模板（AI 未启用）'
+              : '· 念念自动拟的';
+            if (r && r.error === 'ai_not_configured') hint += ' — <a href="#" id="pushbGoAi" style="color:var(--sage);text-decoration:underline">去开启 AI</a>';
+            else if (r && r.error === 'ai_call_failed') hint += ' — 调用失败，请检查 Key / 地址';
+            srcEl.textContent = '';
+            srcEl.innerHTML = hint;
+            srcEl.classList.remove('is-ai');
+            var goAi = srcEl.querySelector('#pushbGoAi');
+            if (goAi) goAi.addEventListener('click', function (e) { e.preventDefault(); switchView('ai'); });
+          }
         }
       }).catch(function () { scriptEl.textContent = '（生成失败，稍后再试）'; });
     }
