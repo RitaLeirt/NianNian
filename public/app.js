@@ -321,16 +321,11 @@
       try { await API.post('/api/items/' + it.id + '/hold', { hours: 6 }); toast('「' + it.title + '」先放一放，6 小时后再看'); loadBoard(); }
       catch (e) { toast('操作失败', 'error'); }
     });
-    card.querySelector('[data-act="push"]').addEventListener('click', async function (e) {
+    card.querySelector('[data-act="push"]').addEventListener('click', function (e) {
       e.stopPropagation();
-      try {
-        var r = await API.post('/api/items/' + it.id + '/push');
-        if (r && r.script) {
-          openScriptForItem(it, r.script);
-        } else {
-          toast('推了一下，凉的天数清零了'); pet.react('happy'); loadBoard();
-        }
-      } catch (e) { toast('操作失败，请重试', 'error'); }
+      // 点「推进一步」不再直接调用 push 接口，而是先弹「结合事项+对接人偏好」的话术生成窗口。
+      // 用户复制话术发出去后，再点窗口底部的进度按钮（先放一放/推进一步/打卡完成）同步看板。
+      openBoardPush(it);
     });
     card.querySelector('[data-act="done"]').addEventListener('click', async function (e) {
       e.stopPropagation();
@@ -690,11 +685,13 @@
     });
   }
   async function openScript(it) {
-    scriptItem = it;
+scriptItem = it;
     $('#scriptForItem').textContent = '为「' + it.title + '」挑一句话术';
     $('#scriptOut').value = '';
-    if ($('#scriptSource')) $('#scriptSource').hidden = true;
+ if ($('#scriptSource')) $('#scriptSource').hidden = true;
     $('#scriptItemActions').hidden = true;
+    $('#scriptTplList').style.display = '';
+    $('#scriptRegen').hidden = true;
     var tpls = await API.get('/api/templates');
     buildTplBtns(it, $('#scriptTplList'), tpls);
     scriptModal.hidden = false;
@@ -706,9 +703,54 @@
     $('#scriptOut').value = text || '';
     if ($('#scriptSource')) $('#scriptSource').hidden = true;
     $('#scriptItemActions').hidden = true;
+    $('#scriptTplList').style.display = '';
+    $('#scriptRegen').hidden = true;
     // 也保留模板选择列表，方便换一句
     API.get('/api/templates').then(function (tpls) { buildTplBtns(it, $('#scriptTplList'), tpls); });
     scriptModal.hidden = false;
+  }
+  // 看板「推进一步」入口：先弹话术生成窗口（结合事项 + 对接人偏好话术，AI 优先），
+  // 底部提供「先放一放 / 推进一步 / 打卡完成」进度按钮，操作即同步看板。
+  function openBoardPush(it) {
+    scriptItem = it;
+    $('#scriptForItem').textContent = '推一下「' + it.title + '」'
+      + (it.person ? ' · 发给 ' + it.person : '')
+      + '——先复制话术发出去，再更新进度：';
+ // 该流程直接给一句（结合对方偏好话术），不需要模板列表选择
+    $('#scriptTplList').innerHTML = '';
+    $('#scriptTplList').style.display = 'none';
+ $('#scriptOut').value = '念念正在斟酌…';
+    $('#scriptSource').hidden = true;
+    $('#scriptItemActions').hidden = false;
+    $('#scriptRegen').hidden = false;
+    scriptModal.hidden = false;
+    fetchAutoScript(it);
+  }
+  // 调 /api/scripts/auto：后端会结合事项(对方/在等/下一步) + 对接人已存话术 + 匹配模板，
+  // 有 AI 就让 AI 直接生成一句，无 AI 则回退到 ta 的偏好话术 / 匹配模板 / 兜底文案。
+  async function fetchAutoScript(it) {
+    var out = $('#scriptOut'), src = $('#scriptSource');
+    out.value = '念念正在斟酌…';
+ src.hidden = true;
+    try {
+      var r = await API.post('/api/scripts/auto', { itemId: it.id });
+      out.value = (r && r.text) || '（没能生成，稍后再试）';
+      src.hidden = false;
+      if (r && r.ai) {
+        src.textContent = '· AI 依据「' + (it.person || '对方') + '」的偏好与本条事项生成';
+        src.classList.add('is-ai');
+      } else {
+        var hint = (r && r.source === 'saved') ? '· 套用了 ' + (it.person || '对方') + ' 的既有话术'
+ : (r && r.source === 'template') ? '· 套用了匹配模板（AI 未启用）'
+          : '· 念念自动拟的';
+        if (r && r.error === 'ai_not_configured') hint += ' — <a href="#" id="scriptGoAi" style="color:var(--sage);text-decoration:underline">去开启 AI</a>';
+    else if (r && r.error === 'ai_call_failed') hint += ' — 调用失败，请检查 Key / 地址';
+        src.innerHTML = hint;
+    src.classList.remove('is-ai');
+        var goAi = src.querySelector('#scriptGoAi');
+        if (goAi) goAi.addEventListener('click', function (e) { e.preventDefault(); scriptModal.hidden = true; switchView('ai'); });
+  }
+    } catch (e) { out.value = '（生成失败，稍后再试）'; }
   }
   // 桌宠「推一下」入口：弹出可复制话术（自动按首个模板生成，可切换）+ 看板同款操作按钮。
   // 桌宠只是更便捷的提示/按钮/操作平台，数据与操作都以看板为准。
@@ -724,16 +766,18 @@
     });
     scriptModal.hidden = false;
   }
-  // 话术弹窗内的进度按钮：与看板同款，操作后同步看板
+  // 话术弹窗内的进度按钮：与看板同款，操作后同步看板并关闭弹窗
   $$('#scriptItemActions [data-sact]').forEach(function (b) {
     b.addEventListener('click', async function () {
-      if (!scriptItem) return;
-      var act = b.getAttribute('data-sact');
+   if (!scriptItem) return;
+    var act = b.getAttribute('data-sact');
       var ok = await itemAction(scriptItem, act);
-      if (ok && act === 'done') scriptModal.hidden = true;
+      if (ok) scriptModal.hidden = true;
     });
   });
   $('#scriptClose').addEventListener('click', function () { scriptModal.hidden = true; });
+  // 换一句：仅在「看板推进一步」流程可见，重新调 autoScript 生成
+  $('#scriptRegen').addEventListener('click', function () { if (scriptItem) fetchAutoScript(scriptItem); });
   $('#scriptCopy').addEventListener('click', function () {
     var t = $('#scriptOut').value; if (!t) return;
     navigator.clipboard && navigator.clipboard.writeText(t); toast('话术已复制');
