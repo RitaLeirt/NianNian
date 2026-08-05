@@ -14,8 +14,32 @@
 
   /* ---------------- Token（一个 token = 一个工作区） ---------------- */
   var TOKEN_KEY = 'niannian-token';
+  var LEDGER_KEY = 'niannian-workspaces'; // 客户端工作区台账（本机曾出现过的工作区，抗服务端 /tmp 冷启动丢数据）
   function getToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
   function setToken(t) { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+  // 台账：{ [token]: { token, label, created_at } }
+  function readLedger() {
+    try { return JSON.parse(localStorage.getItem(LEDGER_KEY) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function writeLedger(m) {
+    try { localStorage.setItem(LEDGER_KEY, JSON.stringify(m)); } catch (e) {}
+  }
+  // 把某个工作区记进台账（新建/切换/看到都会 upsert，label 以最新为准）
+  function recordWorkspace(w) {
+    if (!w || !w.token || w.token === 'demo-default') return;
+    var m = readLedger();
+    var existing = m[w.token] || {};
+    m[w.token] = {
+      token: w.token,
+      label: w.label || existing.label || '我的工作区',
+      created_at: existing.created_at || w.created_at || Date.now(),
+    };
+    writeLedger(m);
+  }
+  function forgetWorkspace(token) {
+    var m = readLedger();
+ if (m[token]) { delete m[token]; writeLedger(m); }
+  }
 
   /* ---------------- API 封装 ---------------- */
   function authHeaders(extra) {
@@ -1478,10 +1502,12 @@ scriptItem = it;
     $('#tokenValue').textContent = me.owner;
     $('#tokenLabel').value = me.label || '';
     var isDefault = !!me.isDefault;
-    // 演示工作区不支持改名（后端限制），但可以「重新生成工作区」新建一份自己的
-    $('#tokenRename').disabled = isDefault;
+    // 演示工作区不支持改名（后端限制），但可以「新建空白工作区」新建一份自己的
+ $('#tokenRename').disabled = isDefault;
     $('#tokenRegen').disabled = false;
-    $('#tokenLabel').placeholder = isDefault ? '演示工作区（新建一个工作区后可改名）' : '我的工作区';
+    $('#tokenLabel').placeholder = isDefault ? '示例工作区（新建工作区后可改名）' : '工作区名称';
+    // 把当前工作区写进客户端台账（非 demo 才记）——即使后端 /tmp 冷启动丢了，本机也不会"忘记"
+    if (!isDefault) recordWorkspace({ token: me.owner, label: me.label, created_at: me.created_at });
   }
   $('#tokenCopy').addEventListener('click', function () {
     var v = $('#tokenValue').textContent;
@@ -1492,30 +1518,43 @@ scriptItem = it;
     var label = $('#tokenLabel').value.trim();
     try {
       await API.put('/api/auth/token', { label: label });
-      toast('工作区名称已保存');
-      // 同步刷新：身份卡（名称）+ 工作区记录表（该行的名称也要更新）
+   toast('工作区名称已保存');
+      // 更新客户端台账里当前工作区的 label
+      var cur = getToken();
+      if (cur && cur !== 'demo-default') recordWorkspace({ token: cur, label: label });
+ // 同步刷新：身份卡（名称）+ 工作区记录表（该行的名称也要更新）
       loadTokenPanel();
-      loadWorkspaceRecords();
-    } catch (e) { toast('保存失败', 'error'); }
+   loadWorkspaceRecords();
+} catch (e) { toast('保存失败', 'error'); }
   });
   $('#tokenRegen').addEventListener('click', async function () {
-    var ok = await confirm('新建一个全新的空工作区并切过去？当前工作区（Token、名称、数据）会完整保留，可随时从下方「工作区记录」切回。');
+    var ok = await confirm('新建一个全新的空白工作区并切过去？\n当前工作区（Token、名称、数据）会完整保留在下方「工作区记录」里，随时切回。');
     if (!ok) return;
-    try {
-      // 新建独立工作区：旧工作区完整保留在记录里，可复制 token 切回查看其数据
-      var t = await API.post('/api/auth/token', { label: '我的工作区' });
+ try {
+   // 【关键】新建前先把"当前工作区"（如果不是 demo）写进客户端台账，防止后端 /tmp 丢数据后本机也失联
+   var prevToken = getToken();
+      if (prevToken && prevToken !== 'demo-default') {
+        try {
+   var prevMe = await API.get('/api/auth/me');
+       recordWorkspace({ token: prevToken, label: prevMe.label, created_at: prevMe.created_at });
+        } catch (e) { /* 静默 */ }
+      }
+    // 新建独立工作区
+   var t = await API.post('/api/auth/token', { label: '我的工作区' });
+  // 立即把新工作区也记进台账
+    recordWorkspace(t);
       setToken(t.token);
       personFilterCache = null; tplFacets = null; journalCache = null;
       // 展示新工作区信息弹窗（名称 / Token / 创建时间）
       $('#regenName').textContent = t.label || '我的工作区';
-      $('#regenToken').textContent = t.token;
+    $('#regenToken').textContent = t.token;
       $('#regenTime').textContent = new Date(t.created_at).toLocaleString('zh-CN');
-      $('#regenModal').hidden = false;
+   $('#regenModal').hidden = false;
       // 切到新工作区后，刷新所有相关数据
       loadTokenPanel();
       loadWorkspaceRecords();
       if (typeof loadBoard === 'function') loadBoard();
-      toast('已新建并切到新工作区');
+  toast('已新建并切到新工作区');
     } catch (e) { toast('操作失败', 'error'); }
   });
   $('#regenClose').addEventListener('click', function () { $('#regenModal').hidden = true; });
@@ -1530,59 +1569,98 @@ if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textCont
     toast('已刷新工作区记录');
   });
 
-  // 工作区记录：列出所有 token（含顶部固定的"示例工作区"）+ 当前工作区徽章 + 切换/复制按钮
-  // 切换后立即刷新身份卡和这张表，让"上方切换后自动同步"变成用户可见事实。
+  // 工作区记录：合并服务端返回 + 客户端台账（本机曾出现过的所有工作区）
+  // 【关键】Vercel /tmp SQLite 冷启动会丢数据；此时服务端可能只返回"示例工作区"一行，
+  // 但客户端 localStorage 台账里还留着用户之前新建过的所有工作区 token/label，
+  // 合并后确保用户永远能看到自己创建过的工作区，并复制 token 切回。
   async function loadWorkspaceRecords() {
     var curToken = getToken() || 'demo-default';
-  try {
+    var serverList = [];
+    try {
       var d = await API.get('/api/auth/tokens');
-      var list = d.tokens || [];
-      if (!list.length) { $('#wsBody').innerHTML = '<tr><td colspan="4" class="ws-empty">暂无记录</td></tr>'; return; }
-   $('#wsBody').innerHTML = list.map(function (r) {
-        var isCur = r.token === curToken;
-     var isDemo = !!r.is_demo;
-        var badges = '';
-if (isDemo) badges += ' <span class="ws-badge-demo">示例</span>';
-if (isCur) badges += ' <span class="ws-badge-cur">当前</span>';
-        var timeCell = isDemo ? '<span style="color:var(--ink-faint)">—</span>'
-   : new Date(r.created_at).toLocaleString('zh-CN', { hour12: false });
-        return '<tr' + (isCur ? ' class="ws-cur"' : '') + (isDemo ? ' data-demo="1"' : '') + '>' +
-      '<td>' + esc(r.label || '我的工作区') + badges + '</td>' +
-          '<td><code class="ws-token-cell">' + esc(r.token) + '</code></td>' +
-          '<td>' + timeCell + '</td>' +
+      serverList = d.tokens || [];
+    } catch (e) { /* 静默：即使服务端拉不到，也用本地台账渲染 */ }
+
+    // 合并：服务端优先（有最新 label），本地台账补充服务端漏掉的
+  var byToken = {};
+    serverList.forEach(function (r) { byToken[r.token] = r; });
+    var ledger = readLedger();
+    Object.keys(ledger).forEach(function (tk) {
+      if (!byToken[tk]) byToken[tk] = Object.assign({ is_local: 1 }, ledger[tk]);
+    });
+    // 保底：无论服务端如何，示例工作区（demo-default）永远出现在列表里
+    if (!byToken['demo-default']) {
+ byToken['demo-default'] = { token: 'demo-default', label: '示例工作区', created_at: 0, is_demo: 1 };
+    }
+    // 排序：示例 → 当前 → 其他按创建时间倒序
+    var list = Object.values(byToken).sort(function (a, b) {
+      if (a.is_demo) return -1;
+    if (b.is_demo) return 1;
+      if (a.token === curToken) return -1;
+      if (b.token === curToken) return 1;
+      return (b.created_at || 0) - (a.created_at || 0);
+    });
+
+  if (!list.length) {
+      $('#wsBody').innerHTML = '<tr><td colspan="4" class="ws-empty">暂无记录</td></tr>';
+  return;
+ }
+    $('#wsBody').innerHTML = list.map(function (r) {
+ var isCur = r.token === curToken;
+      var isDemo = !!r.is_demo;
+      var isLocalOnly = !!r.is_local; // 服务端已丢失，仅本地台账有
+      var badges = '';
+      if (isDemo) badges += ' <span class="ws-badge-demo">示例</span>';
+      if (isCur) badges += ' <span class="ws-badge-cur">当前</span>';
+      if (isLocalOnly && !isDemo) badges += ' <span class="ws-badge-local" title="服务器尚未同步此工作区数据，切过去后会重新初始化">本机记录</span>';
+      var timeCell = isDemo ? '<span style="color:var(--ink-faint)">—</span>'
+        : new Date(r.created_at || 0).toLocaleString('zh-CN', { hour12: false });
+      return '<tr' + (isCur ? ' class="ws-cur"' : '') + (isDemo ? ' data-demo="1"' : '') + '>' +
+     '<td>' + esc(r.label || '我的工作区') + badges + '</td>' +
+  '<td><code class="ws-token-cell">' + esc(r.token) + '</code></td>' +
+   '<td>' + timeCell + '</td>' +
         '<td class="ws-op-col">' +
-     '<button class="ws-op-btn" data-copy="' + esc(r.token) + '">复制</button>' +
- (isCur ? '' : '<button class="ws-op-btn ws-op-switch" data-switch="' + esc(r.token) + '">切到此工作区</button>') +
-      '</td></tr>';
-}).join('');
-      // 复制 token
-  $$('#wsBody [data-copy]').forEach(function (b) {
-    b.addEventListener('click', function () {
-          if (navigator.clipboard) navigator.clipboard.writeText(b.getAttribute('data-copy'));
- toast('已复制该工作区 Token');
-        });
+      '<button class="ws-op-btn" data-copy="' + esc(r.token) + '">复制</button>' +
+   (isCur ? '' : '<button class="ws-op-btn ws-op-switch" data-switch="' + esc(r.token) + '">切到此工作区</button>') +
+          (isLocalOnly && !isDemo ? '<button class="ws-op-btn ws-op-forget" data-forget="' + esc(r.token) + '" title="从本机记录里移除">忘记</button>' : '') +
+        '</td></tr>';
+    }).join('');
+  // 复制 token
+    $$('#wsBody [data-copy]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (navigator.clipboard) navigator.clipboard.writeText(b.getAttribute('data-copy'));
+        toast('已复制该工作区 Token');
       });
-      // 切到某个工作区：切换后立即刷新身份卡 + 记录表 + 看板，用户能马上看到新数据
-      $$('#wsBody [data-switch]').forEach(function (b) {
+    });
+    // 切到某个工作区
+    $$('#wsBody [data-switch]').forEach(function (b) {
       b.addEventListener('click', async function () {
  var tk = b.getAttribute('data-switch');
-          var isDemo = tk === 'demo-default';
-          var msg = isDemo
-       ? '切回示例工作区？展示预置的演示数据（当前工作区数据完整保留，随时切回）。'
-       : '切到这个工作区？将载入它的独立数据（当前工作区不受影响，随时可切回）。';
-      var ok = await confirm(msg);
-          if (!ok) return;
-  setToken(tk);
-    // 清所有缓存，确保后续渲染是新工作区的数据
-     personFilterCache = null; tplFacets = null; journalCache = null;
-     toast(isDemo ? '已切回示例工作区' : '已切到该工作区');
-   // 三处同步刷新
-   loadTokenPanel(); loadWorkspaceRecords(); refreshAiStatus();
-      if (typeof loadBoard === 'function') loadBoard();
+        var isDemo = tk === 'demo-default';
+        var msg = isDemo
+ ? '切回示例工作区？展示预置的演示数据（当前工作区数据完整保留，随时切回）。'
+   : '切到这个工作区？将载入它的独立数据（当前工作区不受影响，随时可切回）。';
+        var ok = await confirm(msg);
+      if (!ok) return;
+        setToken(tk);
+  personFilterCache = null; tplFacets = null; journalCache = null;
+        toast(isDemo ? '已切回示例工作区' : '已切到该工作区');
+        loadTokenPanel(); loadWorkspaceRecords(); refreshAiStatus();
+        if (typeof loadBoard === 'function') loadBoard();
+   });
+    });
+    // 从本机台账移除
+  $$('#wsBody [data-forget]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        var tk = b.getAttribute('data-forget');
+        var ok = await confirm('从本机记录里移除这个工作区？Token 仍然有效（如果服务端还留着），可以粘贴 token 重新加入。');
+        if (!ok) return;
+        forgetWorkspace(tk);
+        loadWorkspaceRecords();
+        toast('已从本机记录移除');
       });
-      });
-    } catch (e) { $('#wsBody').innerHTML = '<tr><td colspan="4" class="ws-empty">加载失败</td></tr>'; }
-}
+  });
+  }
 
   /* ---------------- AI 设置 ---------------- */
   function syncAiCfgVisibility(src) {
