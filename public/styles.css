@@ -749,14 +749,23 @@ body {
   background: var(--paper-2); border: 1px dashed var(--line);
   border-radius: 12px;
 }
+/* 关键修复：display: flex 会覆盖 [hidden] 默认的 display: none。
+ * 显式加 [hidden] 强制隐藏，防止"设了 hidden 但视觉上仍显示"的经典 bug。 */
+.ai-empty-state[hidden],
+.ai-fields[hidden],
+.ai-field[hidden],
+.ai-actions[hidden],
+.ai-test-result[hidden] { display: none !important; }
 .ai-empty-ico {
   flex: none; width: 36px; height: 36px; border-radius: 10px;
   background: var(--sage-soft); color: var(--sage-deep);
   display: flex; align-items: center; justify-content: center;
 }
 .ai-empty-body { flex: 1; }
-.ai-empty-title { font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
-.ai-empty-desc { margin: 0; font-size: 12.5px; color: var(--ink-soft); line-height: 1.6; }
+.ai-empty-title { font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 4px; letter-spacing: .1px; }
+.ai-empty-desc { margin: 0; font-size: 12.5px; color: var(--ink-soft); line-height: 1.65; }
+/* 切换来源时字段区平滑淡入，避免突兀 */
+.ai-fields, .ai-empty-state, .ai-actions { transition: opacity .2s var(--ease); }
 
 /* 工作区记录卡片头：标题左对齐 + 右侧刷新按钮 */
 .ws-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
