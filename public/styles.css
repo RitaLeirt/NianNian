@@ -606,11 +606,52 @@ body {
  * 三段式：身份卡（工作区+Token）· AI 引擎（分段卡片+折叠说明）· 工作区记录
  * ============================================================ */
 /* 通用：卡片头（h3 + sub） */
-.ws-card, .ai-card, .ws-list-card {
+.ws-card, .ai-card, .ws-list-card, .ws-module {
   background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
   padding: 24px; margin-bottom: 24px;
 }
+
+/* Tabbed 工作区模块：把身份卡+工作区记录合并成一个模块 */
+.ws-module { padding: 0; overflow: hidden; }
+.ws-tabs {
+  display: flex; padding: 0 8px;
+  background: var(--paper-2); border-bottom: 1px solid var(--line);
+}
+.ws-tab {
+  position: relative; flex: 0 0 auto;
+  background: transparent; border: none; cursor: pointer;
+  padding: 14px 20px; margin: 0;
+  font-family: var(--font-body); font-size: 14px; color: var(--ink-soft);
+  font-weight: 500; letter-spacing: .2px; line-height: 1;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: color .18s var(--ease);
+}
+.ws-tab:hover { color: var(--sage-deep); }
+.ws-tab.is-on { color: var(--sage-deep); font-weight: 600; }
+/* 底部激活指示条：sage 色的短横线，随 tab 移动 */
+.ws-tab.is-on::after {
+  content: ''; position: absolute; left: 20px; right: 20px; bottom: -1px;
+  height: 2px; background: var(--sage); border-radius: 2px 2px 0 0;
+}
+/* 记录数量小徽章 */
+.ws-tab-count {
+  font-family: var(--font-mono); font-size: 10.5px;
+  padding: 1px 7px; border-radius: 999px;
+  background: rgba(127,160,133,.14); color: var(--ink-soft);
+  min-width: 20px; text-align: center;
+  transition: background .18s var(--ease), color .18s var(--ease);
+}
+.ws-tab.is-on .ws-tab-count { background: var(--sage); color: #fff; }
+/* Tab 面板 */
+.ws-tab-panel { padding: 24px 26px; }
+.ws-tab-panel[hidden] { display: none !important; }
+/* 工作区记录面板顶部的一行提示+刷新按钮 */
+.ws-list-head-inline {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 16px;
+}
+.ws-list-hint { margin: 0; font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
 .ai-card-head { margin-bottom: 20px; }
 .ai-card-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin: 0 0 4px; color: var(--ink); letter-spacing: .2px; }
 .ai-card-sub { margin: 0; font-size: 13px; color: var(--ink-soft); line-height: 1.6; }

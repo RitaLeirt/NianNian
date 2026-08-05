@@ -1552,9 +1552,11 @@ scriptItem = it;
    $('#regenModal').hidden = false;
       // 切到新工作区后，刷新所有相关数据
       loadTokenPanel();
-      loadWorkspaceRecords();
+  loadWorkspaceRecords();
       if (typeof loadBoard === 'function') loadBoard();
-  toast('已新建并切到新工作区');
+      // 新建成功后跳到"当前工作区"tab（用户可能是从记录 tab 上过来的）
+      switchWsTab('current');
+   toast('已新建并切到新工作区');
     } catch (e) { toast('操作失败', 'error'); }
   });
   $('#regenClose').addEventListener('click', function () { $('#regenModal').hidden = true; });
@@ -1568,6 +1570,30 @@ if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textCont
     loadWorkspaceRecords();
     toast('已刷新工作区记录');
   });
+
+  // ---- 工作区模块的内层 Tab（当前工作区 / 工作区记录）----
+  // 底部横线动画 + 计数徽章。点"工作区记录"时自动拉一次最新数据。
+  function switchWsTab(name) {
+    $$('.ws-tab').forEach(function (b) {
+      var on = b.getAttribute('data-ws-tab') === name;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    $$('.ws-tab-panel').forEach(function (p) {
+      p.hidden = p.getAttribute('data-ws-panel') !== name;
+    });
+ if (name === 'list') loadWorkspaceRecords(); // 打开列表时保证是最新
+  }
+  $$('.ws-tab').forEach(function (b) {
+  b.addEventListener('click', function () {
+      switchWsTab(b.getAttribute('data-ws-tab'));
+    });
+  });
+  // 更新计数徽章（不含 demo 自己，显示"用户创建过多少个"）
+  function updateWsTabCount(n) {
+    var el = $('#wsTabCount');
+    if (el) el.textContent = String(n);
+  }
 
   // 工作区记录：合并服务端返回 + 客户端台账（本机曾出现过的所有工作区）
   // 【关键】Vercel /tmp SQLite 冷启动会丢数据；此时服务端可能只返回"示例工作区"一行，
@@ -1603,9 +1629,11 @@ if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textCont
 
   if (!list.length) {
       $('#wsBody').innerHTML = '<tr><td colspan="4" class="ws-empty">暂无记录</td></tr>';
-  return;
- }
-    $('#wsBody').innerHTML = list.map(function (r) {
+      updateWsTabCount(0);
+      return;
+    }
+  updateWsTabCount(list.length);
+ $('#wsBody').innerHTML = list.map(function (r) {
  var isCur = r.token === curToken;
       var isDemo = !!r.is_demo;
       var isLocalOnly = !!r.is_local; // 服务端已丢失，仅本地台账有
@@ -1621,7 +1649,7 @@ if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textCont
    '<td>' + timeCell + '</td>' +
         '<td class="ws-op-col">' +
       '<button class="ws-op-btn" data-copy="' + esc(r.token) + '">复制</button>' +
-   (isCur ? '' : '<button class="ws-op-btn ws-op-switch" data-switch="' + esc(r.token) + '">切到此工作区</button>') +
+   (isCur ? '' : '<button class="ws-op-btn ws-op-switch" data-switch="' + esc(r.token) + '" data-label="' + esc(r.label || '我的工作区') + '">切到此工作区</button>') +
           (isLocalOnly && !isDemo ? '<button class="ws-op-btn ws-op-forget" data-forget="' + esc(r.token) + '" title="从本机记录里移除">忘记</button>' : '') +
         '</td></tr>';
     }).join('');
@@ -1635,19 +1663,29 @@ if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textCont
     // 切到某个工作区
     $$('#wsBody [data-switch]').forEach(function (b) {
       b.addEventListener('click', async function () {
- var tk = b.getAttribute('data-switch');
+   var tk = b.getAttribute('data-switch');
+        var label = b.getAttribute('data-label') || (tk === 'demo-default' ? '示例工作区' : '这个工作区');
         var isDemo = tk === 'demo-default';
+ // 二次弹窗：明确显示要切到哪个 + 切换后行为
         var msg = isDemo
- ? '切回示例工作区？展示预置的演示数据（当前工作区数据完整保留，随时切回）。'
-   : '切到这个工作区？将载入它的独立数据（当前工作区不受影响，随时可切回）。';
-        var ok = await confirm(msg);
-      if (!ok) return;
+ ? '切回示例工作区？\n\n页面将刷新到"当前工作区"页签，展示预置的演示数据。当前工作区数据完整保留，随时切回。'
+          : '切换到「' + label + '」？\n\n页面将刷新到"当前工作区"页签并载入它的独立数据。当前工作区不受影响，随时可切回。';
+      var ok = await confirm(msg);
+        if (!ok) return;
         setToken(tk);
-  personFilterCache = null; tplFacets = null; journalCache = null;
-        toast(isDemo ? '已切回示例工作区' : '已切到该工作区');
-        loadTokenPanel(); loadWorkspaceRecords(); refreshAiStatus();
-        if (typeof loadBoard === 'function') loadBoard();
-   });
+        // 清所有缓存，保证下方各面板拉的都是新工作区的数据
+        personFilterCache = null; tplFacets = null; journalCache = null;
+ // 立刻跳回"当前工作区"tab（因为用户是从"工作区记录"tab 点过来的）
+        switchWsTab('current');
+   // 全面刷新：身份卡 + 记录表 + AI 状态灯 + 看板
+      await Promise.all([
+   Promise.resolve(loadTokenPanel()),
+          Promise.resolve(loadWorkspaceRecords()),
+  Promise.resolve(refreshAiStatus()),
+     (typeof loadBoard === 'function') ? Promise.resolve(loadBoard()) : Promise.resolve(),
+        ]);
+        toast(isDemo ? '已切回示例工作区' : '已切到「' + label + '」');
+      });
     });
     // 从本机台账移除
   $$('#wsBody [data-forget]').forEach(function (b) {
@@ -1813,7 +1851,7 @@ try {
     else if (view === 'contacts') loadContacts();
     else if (view === 'journal') loadJournal();
     else if (view === 'petsettings') loadPetSettings();
-    else if (view === 'ai') { loadTokenPanel(); loadWorkspaceRecords(); loadAISettings(); refreshAiStatus(); }
+    else if (view === 'ai') { switchWsTab('current'); loadTokenPanel(); loadWorkspaceRecords(); loadAISettings(); refreshAiStatus(); }
   }
   $$('.nav-item').forEach(function (b) { b.addEventListener('click', function () { switchView(b.getAttribute('data-view')); }); });
   // AI 状态灯：点一下直达设置

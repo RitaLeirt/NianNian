@@ -529,30 +529,60 @@
        <p class="pane-sub">Token 隔离数据；AI 可选接入。</p>
       </div>
 
-<!-- ① 身份卡：当前工作区（名称 · Token · 一键跨设备复用） -->
-  <section class="ws-card">
-  <div class="ws-card-head">
-    <div class="ws-card-title">
-              <span class="ws-card-eyebrow">当前工作区</span>
-     <input id="tokenLabel" class="ws-name-input" type="text" maxlength="20" placeholder="工作区名称" aria-label="工作区名称" />
- </div>
-       <button id="tokenRename" class="btn btn-ghost btn-sm ws-name-save" type="button">保存名称</button>
-      </div>
-     <div class="ws-token-row">
-       <div class="ws-token-label">Token</div>
-    <code id="tokenValue" class="ws-token-value">demo-default</code>
-          <button id="tokenCopy" class="btn btn-ghost btn-sm ws-token-copy" type="button" title="复制 Token">
-     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-     <span>复制</span>
-      </button>
-       </div>
-   <div class="ws-card-foot">
-<p class="ws-card-hint">在别的设备粘贴此 token 即可打开同一份数据。</p>
-  <button id="tokenRegen" class="btn-danger-ghost" type="button">
+<!-- ①+② 合并模块：当前工作区 / 工作区记录 · Tab 切换 -->
+  <section class="ws-module">
+   <div class="ws-tabs" role="tablist" aria-label="工作区">
+   <button class="ws-tab is-on" role="tab" aria-selected="true" type="button" data-ws-tab="current">
+     <span>当前工作区</span>
+   </button>
+     <button class="ws-tab" role="tab" aria-selected="false" type="button" data-ws-tab="list">
+      <span>工作区记录</span>
+       <span class="ws-tab-count" id="wsTabCount" aria-hidden="true">0</span>
+   </button>
+  </div>
+
+<!-- 面板一：当前工作区 -->
+   <div class="ws-tab-panel" role="tabpanel" data-ws-panel="current">
+    <div class="ws-card-head">
+      <div class="ws-card-title">
+   <span class="ws-card-eyebrow">正在使用</span>
+    <input id="tokenLabel" class="ws-name-input" type="text" maxlength="20" placeholder="工作区名称" aria-label="工作区名称" />
+   </div>
+    <button id="tokenRename" class="btn btn-ghost btn-sm ws-name-save" type="button">保存名称</button>
+        </div>
+        <div class="ws-token-row">
+     <div class="ws-token-label">Token</div>
+     <code id="tokenValue" class="ws-token-value">demo-default</code>
+     <button id="tokenCopy" class="btn btn-ghost btn-sm ws-token-copy" type="button" title="复制 Token">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+   <span>复制</span>
+   </button>
+  </div>
+     <div class="ws-card-foot">
+    <p class="ws-card-hint">在别的设备粘贴此 token 即可打开同一份数据。</p>
+     <button id="tokenRegen" class="btn-danger-ghost" type="button">
        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v6l3 2"/><circle cx="12" cy="12" r="9"/></svg>
         <span>新建空白工作区</span>
-  </button>
-          </div>
+   </button>
+     </div>
+      </div>
+
+    <!-- 面板二：工作区记录 -->
+      <div class="ws-tab-panel" role="tabpanel" data-ws-panel="list" hidden>
+        <div class="ws-list-head-inline">
+          <p class="ws-list-hint">本机所有工作区。切换后即时同步。</p>
+  <button id="wsRefresh" class="btn btn-ghost btn-sm" type="button" title="刷新">
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/></svg>
+       <span>刷新</span>
+    </button>
+   </div>
+      <div class="ws-table-wrap">
+ <table class="ws-table" id="wsTable">
+        <thead><tr><th>工作区</th><th>Token</th><th>创建时间</th><th class="ws-op-col">操作</th></tr></thead>
+       <tbody id="wsBody"><tr><td colspan="4" class="ws-empty">加载中…</td></tr></tbody>
+      </table>
+      </div>
+     </div>
    </section>
 
 <!-- ② AI 引擎设置 -->
@@ -644,27 +674,9 @@
  </details>
   </section>
 
-  <!-- ③ 工作区记录 -->
-   <section class="ws-list-card">
-    <header class="ai-card-head ws-list-head">
-   <div>
-     <h3 class="ai-card-title">工作区记录</h3>
-      <p class="ai-card-sub">本机所有工作区。切换后即时同步。</p>
-     </div>
-  <button id="wsRefresh" class="btn btn-ghost btn-sm" type="button" title="刷新">
-     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/></svg>
-<span>刷新</span>
-   </button>
- </header>
-  <div class="ws-table-wrap">
-<table class="ws-table" id="wsTable">
-     <thead><tr><th>工作区</th><th>Token</th><th>创建时间</th><th class="ws-op-col">操作</th></tr></thead>
-         <tbody id="wsBody"><tr><td colspan="4" class="ws-empty">加载中…</td></tr></tbody>
-     </table>
-  </div>
-        </section>
+
       </section>
-    </main>
+ </main>
   </div>
   </div>
 
