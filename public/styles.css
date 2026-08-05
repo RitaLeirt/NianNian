@@ -597,6 +597,155 @@ body {
 .ws-field .ws-v { font-size: 13.5px; color: var(--ink); word-break: break-all; }
 .ws-field .ws-token { font-family: var(--font-mono); font-size: 12.5px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
 
+/* ============================================================
+ * 「账户与令牌」页 · 重设计
+ * 三段式：身份卡（工作区+Token）· AI 引擎（分段卡片+折叠说明）· 工作区记录
+ * ============================================================ */
+/* 通用：卡片头（h3 + sub） */
+.ws-card, .ai-card, .ws-list-card {
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-m);
+  box-shadow: var(--shadow-card);
+  padding: 24px; margin-bottom: 24px;
+}
+.ai-card-head { margin-bottom: 20px; }
+.ai-card-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin: 0 0 4px; color: var(--ink); letter-spacing: .2px; }
+.ai-card-sub { margin: 0; font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
+
+/* ① 身份卡 --------------------------------------------------------- */
+.ws-card { padding: 24px 26px; }
+.ws-card-head { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 18px; }
+.ws-card-title { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ws-card-eyebrow {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-faint);
+  text-transform: uppercase; letter-spacing: .8px;
+}
+.ws-name-input {
+  border: none; background: transparent; padding: 0;
+  font-family: var(--font-display); font-size: 24px; font-weight: 700;
+  color: var(--ink); letter-spacing: .3px; outline: none; width: 100%;
+  border-bottom: 1px dashed transparent;
+  transition: border-color .18s var(--ease);
+}
+.ws-name-input:hover { border-bottom-color: var(--line); }
+.ws-name-input:focus { border-bottom-color: var(--sage); }
+.ws-name-input::placeholder { color: var(--ink-faint); font-weight: 500; }
+.ws-name-save { flex: none; }
+
+.ws-token-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--paper-2); border: 1px solid var(--line);
+  border-radius: 12px; padding: 10px 12px 10px 16px;
+}
+.ws-token-label {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-faint);
+  text-transform: uppercase; letter-spacing: .8px; flex: none;
+}
+.ws-token-value {
+  font-family: var(--font-mono); font-size: 14px; color: var(--ink);
+  flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 2px 0;
+  scrollbar-width: none;
+}
+.ws-token-value::-webkit-scrollbar { display: none; }
+.ws-token-copy { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; }
+.ws-token-copy svg { opacity: .7; }
+.ws-token-copy:hover svg { opacity: 1; }
+
+.ws-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.ws-card-hint { margin: 0; font-size: 12.5px; color: var(--ink-faint); flex: 1; min-width: 0; line-height: 1.5; }
+
+/* Danger 幽灵按钮：低调但明显区别于普通 ghost，用于破坏性/独立性动作 */
+.btn-danger-ghost {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid rgba(189,90,55,.3); background: transparent;
+  color: var(--rust); cursor: pointer;
+  padding: 7px 14px; border-radius: 999px;
+  font-family: var(--font-body); font-size: 12.5px; letter-spacing: .2px;
+  transition: background .18s var(--ease), border-color .18s var(--ease), color .18s var(--ease);
+}
+.btn-danger-ghost:hover { background: rgba(189,90,55,.08); border-color: var(--rust); }
+.btn-danger-ghost svg { opacity: .8; }
+
+/* ② AI 引擎卡片 ---------------------------------------------------- */
+/* 模型来源：可点击分段卡片，比 radio 明显得多 */
+.ai-source-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  margin-bottom: 22px;
+}
+.ai-source-card {
+  position: relative; cursor: pointer;
+  background: var(--paper-2); border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px 16px; min-height: 68px;
+  transition: border-color .18s var(--ease), background .18s var(--ease), box-shadow .18s var(--ease);
+  display: flex; align-items: center;
+}
+.ai-source-card input[type="radio"] {
+  position: absolute; opacity: 0; pointer-events: none;
+}
+.ai-src-body { display: flex; flex-direction: column; gap: 3px; }
+.ai-src-title { font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--ink); }
+.ai-src-desc { font-size: 11.5px; color: var(--ink-faint); line-height: 1.5; }
+.ai-source-card:hover { border-color: var(--sage); background: var(--paper); }
+.ai-source-card:has(input:checked) {
+  border-color: var(--sage); background: var(--sage-soft);
+  box-shadow: 0 0 0 1px var(--sage) inset;
+}
+.ai-source-card:has(input:checked) .ai-src-title { color: var(--sage-deep); }
+
+/* AI 字段区 */
+.ai-fields { display: flex; flex-direction: column; gap: 16px; margin-bottom: 18px; }
+.ai-field { display: flex; flex-direction: column; gap: 6px; }
+.ai-field-label {
+  font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--ink);
+  letter-spacing: .2px;
+}
+.ai-field-input { width: 100%; }
+.ai-field-hint { margin: 0; font-size: 11.5px; color: var(--ink-faint); line-height: 1.5; }
+
+/* 操作条 */
+.ai-actions {
+  display: flex; align-items: center; gap: 12px;
+  padding-top: 16px; border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.ai-actions-hint {
+  flex: 1; min-width: 180px;
+  font-size: 11.5px; color: var(--ink-faint); line-height: 1.5;
+}
+
+/* AI 用途折叠区 */
+.ai-usage-panel {
+  margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line);
+}
+.ai-usage-panel summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer; font-size: 12.5px; color: var(--ink-soft);
+  padding: 4px 0; list-style: none; user-select: none;
+  transition: color .18s var(--ease);
+}
+.ai-usage-panel summary::-webkit-details-marker { display: none; }
+.ai-usage-panel summary:hover { color: var(--sage-deep); }
+.ai-usage-chev { transition: transform .22s var(--ease); }
+.ai-usage-panel[open] .ai-usage-chev { transform: rotate(90deg); }
+.ai-usage { margin: 12px 0 0; padding-left: 20px; font-size: 13px; color: var(--ink-soft); line-height: 1.8; }
+.ai-usage li { margin-bottom: 4px; }
+.ai-usage b { color: var(--ink); font-weight: 600; }
+
+/* ③ 工作区记录卡片 -------------------------------------------------- */
+.ws-list-card { padding: 24px 26px; margin-bottom: 0; }
+.ws-table-wrap { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ws-table-wrap .ws-table { margin: 0; }
+.ws-table-wrap .ws-table thead th { background: var(--paper-2); padding: 12px 16px; }
+.ws-table-wrap .ws-table td { padding: 12px 16px; }
+.ws-empty { color: var(--ink-faint); font-size: 13px; text-align: center; padding: 30px 12px !important; }
+
+/* 响应式 */
+@media (max-width: 720px) {
+  .ai-source-grid { grid-template-columns: 1fr; }
+  .ws-card, .ai-card, .ws-list-card { padding: 20px; }
+  .ws-card-foot { flex-direction: column; align-items: flex-start; }
+}
+
+
 @media (max-width: 900px) {
   .sch-layout { grid-template-columns: 1fr; }
   /* 看板筛选：竖向堆叠，每组独占一行、左对齐、可横向滚动；去掉居中的碎竖线分隔符 */
