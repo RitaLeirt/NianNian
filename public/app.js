@@ -1595,6 +1595,61 @@ if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textCont
     if (el) el.textContent = String(n);
   }
 
+  // 统一的"切换到 token"函数：
+  //   1. 先调 /api/auth/adopt 把这个 token 登记到当前服务端实例（抗 Vercel /tmp 冷启动丢数据）
+  //   2. setToken 更新 localStorage
+  //   3. 清全部缓存
+  //   4. 立刻跳回"当前工作区"tab
+  //   5. 并行刷新身份卡 / 记录表 / AI 状态灯 / 看板
+  //   6. 验证 /api/auth/me 是否真的返回了新 token（如果服务端 fallback 到 demo，用户能看到）
+  async function switchToToken(token, label, isDemo) {
+ try {
+      if (!isDemo) {
+   // 非 demo 才需要 adopt——demo 是服务端固定虚拟行
+        try { await API.post('/api/auth/adopt', { token: token, label: label }); }
+        catch (e) { /* adopt 失败不阻塞切换，最坏情况和以前一样 */ }
+      }
+      setToken(token);
+      personFilterCache = null; tplFacets = null; journalCache = null;
+      switchWsTab('current');
+    // 立刻校验：me 接口真的返回了这个 token 吗？
+   var me = await API.get('/api/auth/me').catch(function () { return null; });
+      if (me && !isDemo && me.owner !== token) {
+        // 服务端把它当 demo 处理了（罕见）——提示用户 & 兜底继续
+        toast('服务端未识别此工作区，已切到示例数据', 'error');
+      }
+      await Promise.all([
+        Promise.resolve(loadTokenPanel()),
+        Promise.resolve(loadWorkspaceRecords()),
+    Promise.resolve(refreshAiStatus()),
+    (typeof loadBoard === 'function') ? Promise.resolve(loadBoard()) : Promise.resolve(),
+    ]);
+      toast(isDemo ? '已切回示例工作区' : '已切到「' + (label || '工作区') + '」');
+    } catch (e) {
+      toast('切换失败，请重试', 'error');
+    }
+  }
+
+  // "输入 Token 加入"：允许用户粘贴一个已知 token 直接切过去（跨设备用途）
+  var tokenJoinBtn = $('#tokenJoin');
+  if (tokenJoinBtn) tokenJoinBtn.addEventListener('click', async function () {
+    var input = $('#tokenJoinInput');
+    var val = (input && input.value || '').trim();
+    if (!val) { toast('请先粘贴一个 Token', 'error'); if (input) input.focus(); return; }
+    if (val === getToken()) { toast('已经在这个工作区了'); return; }
+ if (val === 'demo-default') { await switchToToken('demo-default', '示例工作区', true); if (input) input.value = ''; return; }
+    // 二次确认，防止误粘贴
+    var ok = await confirm('切换到 Token「' + val.slice(0, 10) + '…」？\n\n如果这个 token 在当前实例上从未登记过，会自动加入到本机记录里。');
+    if (!ok) return;
+    await switchToToken(val, '加入的工作区', false);
+    if (input) input.value = '';
+  });
+  // 支持在输入框里按回车直接触发
+  var tokenJoinInput = $('#tokenJoinInput');
+  if (tokenJoinInput) tokenJoinInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); tokenJoinBtn && tokenJoinBtn.click(); }
+  });
+
   // 工作区记录：合并服务端返回 + 客户端台账（本机曾出现过的所有工作区）
   // 【关键】Vercel /tmp SQLite 冷启动会丢数据；此时服务端可能只返回"示例工作区"一行，
   // 但客户端 localStorage 台账里还留着用户之前新建过的所有工作区 token/label，
@@ -1660,31 +1715,19 @@ if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textCont
         toast('已复制该工作区 Token');
       });
     });
-    // 切到某个工作区
+   // 切到某个工作区
     $$('#wsBody [data-switch]').forEach(function (b) {
-      b.addEventListener('click', async function () {
-   var tk = b.getAttribute('data-switch');
+    b.addEventListener('click', async function () {
+        var tk = b.getAttribute('data-switch');
         var label = b.getAttribute('data-label') || (tk === 'demo-default' ? '示例工作区' : '这个工作区');
-        var isDemo = tk === 'demo-default';
- // 二次弹窗：明确显示要切到哪个 + 切换后行为
-        var msg = isDemo
- ? '切回示例工作区？\n\n页面将刷新到"当前工作区"页签，展示预置的演示数据。当前工作区数据完整保留，随时切回。'
-          : '切换到「' + label + '」？\n\n页面将刷新到"当前工作区"页签并载入它的独立数据。当前工作区不受影响，随时可切回。';
-      var ok = await confirm(msg);
-        if (!ok) return;
-        setToken(tk);
-        // 清所有缓存，保证下方各面板拉的都是新工作区的数据
-        personFilterCache = null; tplFacets = null; journalCache = null;
- // 立刻跳回"当前工作区"tab（因为用户是从"工作区记录"tab 点过来的）
-        switchWsTab('current');
-   // 全面刷新：身份卡 + 记录表 + AI 状态灯 + 看板
-      await Promise.all([
-   Promise.resolve(loadTokenPanel()),
-          Promise.resolve(loadWorkspaceRecords()),
-  Promise.resolve(refreshAiStatus()),
-     (typeof loadBoard === 'function') ? Promise.resolve(loadBoard()) : Promise.resolve(),
-        ]);
-        toast(isDemo ? '已切回示例工作区' : '已切到「' + label + '」');
+   var isDemo = tk === 'demo-default';
+        // 二次弹窗：明确显示要切到哪个 + 切换后行为
+   var msg = isDemo
+    ? '切回示例工作区？\n\n页面将刷新到"当前工作区"页签，展示预置的演示数据。当前工作区数据完整保留，随时切回。'
+    : '切换到「' + label + '」？\n\n页面将刷新到"当前工作区"页签并载入它的独立数据。当前工作区不受影响，随时可切回。';
+  var ok = await confirm(msg);
+  if (!ok) return;
+   await switchToToken(tk, label, isDemo);
       });
     });
     // 从本机台账移除

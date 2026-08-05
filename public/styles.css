@@ -695,6 +695,22 @@ body {
 .ws-token-copy svg { opacity: .7; }
 .ws-token-copy:hover svg { opacity: 1; }
 
+/* 手动输入 Token 加入：与 ws-token-row 同款容器风格，但用虚线边框暗示"未确认输入" */
+.ws-join-row {
+  display: flex; align-items: center; gap: 10px;
+  background: transparent; border: 1px dashed var(--line);
+  border-radius: 12px; padding: 6px 8px 6px 16px; margin-top: 10px;
+  transition: border-color .18s var(--ease), background .18s var(--ease);
+}
+.ws-join-row:focus-within { border-color: var(--sage); background: var(--paper-2); border-style: solid; }
+.ws-join-input {
+  flex: 1; min-width: 0; border: none; background: transparent; outline: none;
+  font-family: var(--font-mono); font-size: 13px; color: var(--ink);
+  padding: 6px 0;
+}
+.ws-join-input::placeholder { color: var(--ink-faint); font-family: var(--font-body); font-size: 12.5px; }
+.ws-join-btn { flex: none; }
+
 .ws-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
 .ws-card-hint { margin: 0; font-size: 12.5px; color: var(--ink-faint); flex: 1; min-width: 0; line-height: 1.5; }
 

@@ -119,11 +119,19 @@ async function handleApi(req, res, url) {
    if (method === 'GET' && seg[2] === 'tokens') {
     return sendJSON(res, 200, { tokens: Auth.list() });
       }
-      if (method === 'POST' && seg[2] === 'token') {
+    if (method === 'POST' && seg[2] === 'token') {
         const body = await readBody(req);
  const t = Auth.issue(body && body.label);
         return sendJSON(res, 201, t);
       }
+      // POST /api/auth/adopt：把一个客户端记住的 token 登记到当前实例（用于抗 Vercel /tmp 冷启动数据丢失）
+    if (method === 'POST' && seg[2] === 'adopt') {
+    const body = await readBody(req);
+      if (!body || !body.token) return sendError(res, 400, '需要 token');
+        if (body.token === DEFAULT_OWNER) return sendJSON(res, 200, { token: DEFAULT_OWNER, adopted: false });
+     const row = Auth.adopt(body.token, body.label, body.created_at);
+        return sendJSON(res, 200, Object.assign({ adopted: true }, row));
+   }
       if (method === 'GET' && seg[2] === 'me') {
         const row = Auth.get(owner);
         return sendJSON(res, 200, { owner, label: row ? row.label : '演示工作区', isDefault: owner === DEFAULT_OWNER });

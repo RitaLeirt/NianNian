@@ -550,7 +550,7 @@
    </div>
     <button id="tokenRename" class="btn btn-ghost btn-sm ws-name-save" type="button">保存名称</button>
         </div>
-        <div class="ws-token-row">
+ <div class="ws-token-row">
      <div class="ws-token-label">Token</div>
      <code id="tokenValue" class="ws-token-value">demo-default</code>
      <button id="tokenCopy" class="btn btn-ghost btn-sm ws-token-copy" type="button" title="复制 Token">
@@ -558,13 +558,21 @@
    <span>复制</span>
    </button>
   </div>
+
+  <!-- 手动输入 Token 加入(跨设备/跨浏览器场景) -->
+  <div class="ws-join-row">
+     <div class="ws-token-label">加入</div>
+      <input id="tokenJoinInput" class="ws-join-input" type="text" placeholder="粘贴一个已有的 Token 加入或切换到那个工作区" spellcheck="false" autocomplete="off" aria-label="加入工作区" />
+     <button id="tokenJoin" class="btn btn-primary btn-sm ws-join-btn" type="button">加入</button>
+  </div>
+
      <div class="ws-card-foot">
     <p class="ws-card-hint">在别的设备粘贴此 token 即可打开同一份数据。</p>
      <button id="tokenRegen" class="btn-danger-ghost" type="button">
-       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v6l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v6l3 2"/><circle cx="12" cy="12" r="9"/></svg>
         <span>新建空白工作区</span>
    </button>
-     </div>
+ </div>
       </div>
 
     <!-- 面板二：工作区记录 -->

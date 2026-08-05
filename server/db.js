@@ -282,6 +282,26 @@ const Auth = {
     // 新建工作区一律空白：不 seed 示例数据。由 seedFor 的白名单机制保证（只有 DEFAULT_OWNER 会被 seed）
     return { token, label: label || '我的工作区', created_at: now };
   },
+  // 认领（adopt）：允许客户端把一个已经存在的 token（比如本机 localStorage 里记住的）
+  // 登记到当前实例的 auth_tokens 表。用于抗 Vercel /tmp 冷启动数据丢失。
+  // 若 token 已存在则更新 label（不覆盖创建时间），否则新建。
+  adopt(token, label, createdAt) {
+    if (!token || token === DEFAULT_OWNER) return null;
+    const existing = db.prepare('SELECT * FROM auth_tokens WHERE token=?').get(token);
+    const now = Date.now();
+    if (existing) {
+      if (label && label !== existing.label) {
+        db.prepare('UPDATE auth_tokens SET label=?, last_used=? WHERE token=?').run(label, now, token);
+  } else {
+        db.prepare('UPDATE auth_tokens SET last_used=? WHERE token=?').run(now, token);
+      }
+      return db.prepare('SELECT * FROM auth_tokens WHERE token=?').get(token);
+    }
+    const ct = createdAt || now;
+    db.prepare('INSERT INTO auth_tokens (token, label, created_at, last_used) VALUES (?,?,?,?)')
+      .run(token, label || '我的工作区', ct, now);
+    return { token, label: label || '我的工作区', created_at: ct };
+  },
   touch(token) {
     db.prepare('UPDATE auth_tokens SET last_used=? WHERE token=?').run(Date.now(), token);
   },
