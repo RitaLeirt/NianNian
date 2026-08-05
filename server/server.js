@@ -113,11 +113,15 @@ async function handleApi(req, res, url) {
   seedFor(owner);
 
   try {
-    /* ======== Auth（Token 签发与管理） ======== */
+  /* ======== Auth（Token 签发与管理） ======== */
     if (resource === 'auth') {
+      // GET /api/auth/tokens：工作区记录（含顶部固定的示例工作区）
+   if (method === 'GET' && seg[2] === 'tokens') {
+    return sendJSON(res, 200, { tokens: Auth.list() });
+      }
       if (method === 'POST' && seg[2] === 'token') {
         const body = await readBody(req);
-        const t = Auth.issue(body && body.label);
+ const t = Auth.issue(body && body.label);
         return sendJSON(res, 201, t);
       }
       if (method === 'GET' && seg[2] === 'me') {
@@ -132,9 +136,6 @@ async function handleApi(req, res, url) {
         if (body.label !== undefined) return sendJSON(res, 200, Auth.rename(owner, body.label));
         return sendError(res, 400, '需要 label 或 regenerate');
       }
-    }
-    if (resource === 'tokens' && method === 'GET') {
-      return sendJSON(res, 200, { tokens: Auth.list() });
     }
     /* ---- AI / 工作区设置 ---- */
   if (resource === 'settings') {

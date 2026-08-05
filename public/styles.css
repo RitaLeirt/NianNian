@@ -585,6 +585,7 @@ body {
 .ws-table tr.ws-cur { background: var(--sage-soft); }
 .ws-token-cell { font-family: var(--font-mono); font-size: 12px; color: var(--ink); background: var(--paper-2); border-radius: 6px; padding: 2px 8px; display: inline-block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
 .ws-badge-cur { font-family: var(--font-mono); font-size: 10px; color: var(--sage-deep); background: rgba(127,160,133,.2); padding: 1px 7px; border-radius: 8px; margin-left: 4px; }
+.ws-badge-demo { font-family: var(--font-mono); font-size: 10px; color: var(--amber); background: rgba(220,154,65,.14); padding: 1px 7px; border-radius: 8px; margin-left: 4px; }
 .ws-op-col { white-space: nowrap; }
 .ws-op-btn { border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); cursor: pointer; font-family: var(--font-body); font-size: 12px; padding: 4px 10px; border-radius: 8px; margin-right: 6px; transition: border-color .16s cubic-bezier(0.16,1,0.3,1), color .16s cubic-bezier(0.16,1,0.3,1), background .16s cubic-bezier(0.16,1,0.3,1); }
 .ws-op-btn:last-child { margin-right: 0; }

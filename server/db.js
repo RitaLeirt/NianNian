@@ -279,14 +279,20 @@ const Auth = {
     const now = Date.now();
     db.prepare('INSERT INTO auth_tokens (token, label, created_at, last_used) VALUES (?,?,?,?)')
       .run(token, label || '我的工作区', now, now);
-    seedFor(token); // 新工作区立即预填示例数据，打开即有内容
+    // 新建工作区一律空白：不 seed 示例数据。由 seedFor 的白名单机制保证（只有 DEFAULT_OWNER 会被 seed）
     return { token, label: label || '我的工作区', created_at: now };
   },
   touch(token) {
     db.prepare('UPDATE auth_tokens SET last_used=? WHERE token=?').run(Date.now(), token);
   },
   get(token) { return db.prepare('SELECT * FROM auth_tokens WHERE token=?').get(token) || null; },
-  list() { return db.prepare('SELECT * FROM auth_tokens ORDER BY created_at DESC').all(); },
+  // 工作区列表：真实用户创建的 + 顶部固定"示例工作区"（DEFAULT_OWNER 虚拟行）
+  // 前端据此展示，切回示例工作区就能看到当初 seed 的演示数据。
+  list() {
+    const real = db.prepare('SELECT * FROM auth_tokens ORDER BY created_at DESC').all();
+    const demoRow = { token: DEFAULT_OWNER, label: '示例工作区', created_at: 0, last_used: null, is_demo: 1 };
+return [demoRow].concat(real);
+  },
   rename(token, label) {
     db.prepare('UPDATE auth_tokens SET label=? WHERE token=?').run(label || '', token);
     return Auth.get(token);
@@ -315,12 +321,15 @@ const Auth = {
 };
 
 /* ============================================================
- * 种子数据（每个 owner 首次访问时写入一批模拟数据，打开即有内容可体验）
+ * 种子数据（仅演示工作区首次访问时写入示例数据；用户新建的工作区一律空白）
  * ============================================================ */
 const seededOwners = new Set();
 function seedFor(owner) {
   if (seededOwners.has(owner)) return;
   seededOwners.add(owner);
+  // 【关键】只给默认演示工作区 seed 示例数据；用户新建的工作区保持完全空白，
+  // 由用户自己从零添加事项 / 对接人 / 定时任务 / 话术。
+if (owner !== DEFAULT_OWNER) return;
   const now = Date.now();
 
   const itemCount = db.prepare('SELECT COUNT(*) c FROM items WHERE owner=?').get(owner).c;

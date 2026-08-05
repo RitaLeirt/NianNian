@@ -1530,46 +1530,59 @@ if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textCont
     toast('已刷新工作区记录');
   });
 
-  // 工作区记录列表：名称 / Token / 创建时间 / 操作（复制 · 切到此工作区查看数据）
+  // 工作区记录：列出所有 token（含顶部固定的"示例工作区"）+ 当前工作区徽章 + 切换/复制按钮
+  // 切换后立即刷新身份卡和这张表，让"上方切换后自动同步"变成用户可见事实。
   async function loadWorkspaceRecords() {
-    var curToken = getToken();
-    try {
+    var curToken = getToken() || 'demo-default';
+  try {
       var d = await API.get('/api/auth/tokens');
       var list = d.tokens || [];
-      if (!list.length) { $('#wsBody').innerHTML = '<tr><td colspan="4" style="color:var(--ink-faint)">暂无记录</td></tr>'; return; }
-      $('#wsBody').innerHTML = list.map(function (r) {
+      if (!list.length) { $('#wsBody').innerHTML = '<tr><td colspan="4" class="ws-empty">暂无记录</td></tr>'; return; }
+   $('#wsBody').innerHTML = list.map(function (r) {
         var isCur = r.token === curToken;
-        return '<tr' + (isCur ? ' class="ws-cur"' : '') + '>' +
-          '<td>' + esc(r.label || '我的工作区') + (isCur ? ' <span class="ws-badge-cur">当前</span>' : '') + '</td>' +
+     var isDemo = !!r.is_demo;
+        var badges = '';
+if (isDemo) badges += ' <span class="ws-badge-demo">示例</span>';
+if (isCur) badges += ' <span class="ws-badge-cur">当前</span>';
+        var timeCell = isDemo ? '<span style="color:var(--ink-faint)">—</span>'
+   : new Date(r.created_at).toLocaleString('zh-CN', { hour12: false });
+        return '<tr' + (isCur ? ' class="ws-cur"' : '') + (isDemo ? ' data-demo="1"' : '') + '>' +
+      '<td>' + esc(r.label || '我的工作区') + badges + '</td>' +
           '<td><code class="ws-token-cell">' + esc(r.token) + '</code></td>' +
-          '<td>' + new Date(r.created_at).toLocaleString('zh-CN') + '</td>' +
-          '<td class="ws-op-col">' +
-            '<button class="ws-op-btn" data-copy="' + esc(r.token) + '">复制</button>' +
-            (isCur ? '' : '<button class="ws-op-btn ws-op-switch" data-switch="' + esc(r.token) + '">切到此工作区</button>') +
-          '</td></tr>';
-      }).join('');
+          '<td>' + timeCell + '</td>' +
+        '<td class="ws-op-col">' +
+     '<button class="ws-op-btn" data-copy="' + esc(r.token) + '">复制</button>' +
+ (isCur ? '' : '<button class="ws-op-btn ws-op-switch" data-switch="' + esc(r.token) + '">切到此工作区</button>') +
+      '</td></tr>';
+}).join('');
       // 复制 token
-      $$('#wsBody [data-copy]').forEach(function (b) {
-        b.addEventListener('click', function () {
+  $$('#wsBody [data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
           if (navigator.clipboard) navigator.clipboard.writeText(b.getAttribute('data-copy'));
-          toast('已复制该工作区 Token');
+ toast('已复制该工作区 Token');
         });
       });
-      // 切到某个工作区查看其数据
+      // 切到某个工作区：切换后立即刷新身份卡 + 记录表 + 看板，用户能马上看到新数据
       $$('#wsBody [data-switch]').forEach(function (b) {
-        b.addEventListener('click', async function () {
-          var tk = b.getAttribute('data-switch');
-          var ok = await confirm('切到这个工作区？将载入它的独立数据（当前工作区不受影响，随时可切回）。');
+      b.addEventListener('click', async function () {
+ var tk = b.getAttribute('data-switch');
+          var isDemo = tk === 'demo-default';
+          var msg = isDemo
+       ? '切回示例工作区？展示预置的演示数据（当前工作区数据完整保留，随时切回）。'
+       : '切到这个工作区？将载入它的独立数据（当前工作区不受影响，随时可切回）。';
+      var ok = await confirm(msg);
           if (!ok) return;
-          setToken(tk);
-          personFilterCache = null; tplFacets = null; journalCache = null;
-          toast('已切到该工作区');
-          loadTokenPanel(); loadWorkspaceRecords();
-          if (typeof loadBoard === 'function') loadBoard();
-        });
+  setToken(tk);
+    // 清所有缓存，确保后续渲染是新工作区的数据
+     personFilterCache = null; tplFacets = null; journalCache = null;
+     toast(isDemo ? '已切回示例工作区' : '已切到该工作区');
+   // 三处同步刷新
+   loadTokenPanel(); loadWorkspaceRecords(); refreshAiStatus();
+      if (typeof loadBoard === 'function') loadBoard();
       });
-    } catch (e) { $('#wsBody').innerHTML = '<tr><td colspan="4" style="color:var(--ink-faint)">加载失败</td></tr>'; }
-  }
+      });
+    } catch (e) { $('#wsBody').innerHTML = '<tr><td colspan="4" class="ws-empty">加载失败</td></tr>'; }
+}
 
   /* ---------------- AI 设置 ---------------- */
   function syncAiCfgVisibility(src) {
