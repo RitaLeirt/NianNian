@@ -524,12 +524,12 @@
 
    <!-- 账户与令牌：Token 管理 + AI 来源设置 -->
     <section id="paneAI" class="pane" hidden aria-label="账户与令牌">
-        <div class="pane-head">
+ <div class="pane-head">
         <h2>账户与令牌</h2>
-       <p class="pane-sub">一个 token = 一个工作区 = 一份完全隔离的数据。AI 只是可选增强，判断"下一步做什么"永远靠念念的确定性推算。</p>
+       <p class="pane-sub">用 token 管数据、用 AI 增强能力。念念做判断永远靠确定性推算，AI 只负责让语言更自然。</p>
         </div>
 
-<!-- ① 身份卡：当前工作区（名称 · Token · AI 状态） -->
+<!-- ① 身份卡：当前工作区（名称 · Token · 一键跨设备复用） -->
   <section class="ws-card">
   <div class="ws-card-head">
     <div class="ws-card-title">
@@ -537,7 +537,7 @@
      <input id="tokenLabel" class="ws-name-input" type="text" maxlength="20" placeholder="给这个工作区起个名字" aria-label="工作区名称" />
             </div>
        <button id="tokenRename" class="btn btn-ghost btn-sm ws-name-save" type="button">保存名称</button>
-          </div>
+      </div>
      <div class="ws-token-row">
        <div class="ws-token-label">Token</div>
     <code id="tokenValue" class="ws-token-value">demo-default</code>
@@ -545,106 +545,123 @@
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
      <span>复制</span>
       </button>
-        </div>
-          <div class="ws-card-foot">
-<p class="ws-card-hint">复制这串 token 就能在别的设备/浏览器进入同一份数据。</p>
+    </div>
+     <div class="ws-card-foot">
+<p class="ws-card-hint">把这串 token 记住，在别的设备/浏览器粘贴即可打开同一份数据（数据只跟着 token 走）。</p>
           <button id="tokenRegen" class="btn-danger-ghost" type="button">
-           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v6l3 2"/><circle cx="12" cy="12" r="9"/></svg>
-              <span>新建独立工作区</span>
-            </button>
+       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v6l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+        <span>新建独立工作区</span>
+  </button>
           </div>
         </section>
 
-        <!-- ② AI 引擎设置 -->
+ <!-- ② AI 引擎设置 -->
   <section class="ai-card">
-          <header class="ai-card-head">
-   <h3 class="ai-card-title">AI 引擎</h3>
-         <p class="ai-card-sub">用来解析口语化输入、生成话术、汇总周报——不接也能用，接了更贴心。</p>
-          </header>
+       <header class="ai-card-head">
+<h3 class="ai-card-title">AI 引擎</h3>
+         <p class="ai-card-sub">选择"用不用 AI"、"用谁的 AI"。默认本地规则即可跑通所有功能——接了 AI 只是让话术更懂你要沟通的那个人。</p>
+        </header>
 
  <!-- 模型来源：三张可点击分段卡片 -->
           <div class="ai-source-grid" role="radiogroup" aria-label="模型来源">
-            <label class="ai-source-card">
+    <label class="ai-source-card">
    <input type="radio" name="aisrc" value="local" checked />
      <div class="ai-src-body">
-         <div class="ai-src-title">本地规则</div>
-  <div class="ai-src-desc">确定性关键词解析，零外部依赖</div>
-              </div>
-            </label>
-            <label class="ai-source-card ai-source-card-primary">
+       <div class="ai-src-title">本地规则</div>
+  <div class="ai-src-desc">关键词 + 正则解析，零依赖、离线可用</div>
+       </div>
+      </label>
+       <label class="ai-source-card ai-source-card-primary">
            <input type="radio" name="aisrc" value="byo" />
    <div class="ai-src-body">
-                <div class="ai-src-title">自带 API Key</div>
-      <div class="ai-src-desc">OpenAI 兼容接口，如 gpt-4o-mini</div>
+           <div class="ai-src-title">自带 API Key</div>
+      <div class="ai-src-desc">OpenAI 兼容接口 · 一次填好即可用</div>
    </div>
        </label>
       <label class="ai-source-card">
         <input type="radio" name="aisrc" value="ollama" />
     <div class="ai-src-body">
        <div class="ai-src-title">本地模型</div>
-                <div class="ai-src-desc">Ollama 之类，数据不出机器</div>
+            <div class="ai-src-desc">Ollama 之类 · 数据完全不出机器</div>
      </div>
     </label>
+  </div>
+
+        <!-- 本地规则空态：当选中本地规则时展示，避免下方留白 -->
+        <div class="ai-empty-state" id="aiEmptyState" hidden>
+          <div class="ai-empty-ico" aria-hidden="true">
+   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M3 12h3M18 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/><circle cx="12" cy="12" r="4"/></svg>
+          </div>
+      <div class="ai-empty-body">
+      <div class="ai-empty-title">本地规则模式</div>
+            <p class="ai-empty-desc">无需 API Key，纯前端 + Node 内置规则运行。想让话术更自然，可切到「自带 API Key」或「本地模型」。</p>
+   </div>
         </div>
 
-       <!-- 动态字段区：随来源自适应显示 -->
-   <div class="ai-fields">
+       <!-- 动态字段区：随来源自适应显示（本地规则下整块隐藏） -->
+   <div class="ai-fields" id="aiFields">
   <div class="ai-field ai-cfg" id="aiCfgByo" hidden>
   <label class="ai-field-label" for="aiApiKey">API Key</label>
     <input id="aiApiKey" class="set-input ai-field-input" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
-        <p class="ai-field-hint">仅存在你的工作区里，请求时才带上，不会外传</p>
-            </div>
+        <p class="ai-field-hint">只存在你的工作区里，只有请求 AI 时才附带，念念服务器不留副本</p>
+      </div>
         <div class="ai-field ai-cfg" id="aiCfgBase" hidden>
-          <label class="ai-field-label" for="aiBase">接口地址</label>
+       <label class="ai-field-label" for="aiBase">接口地址</label>
               <input id="aiBase" class="set-input ai-field-input" type="text" placeholder="https://api.openai.com/v1" spellcheck="false" />
-              <p class="ai-field-hint">OpenAI 兼容 chat/completions；Ollama 默认 http://localhost:11434/v1</p>
+  <p class="ai-field-hint">任何 OpenAI 兼容的 chat/completions 都行；Ollama 默认 http://localhost:11434/v1</p>
      </div>
          <div class="ai-field ai-cfg" id="aiCfgModel" hidden>
-              <label class="ai-field-label" for="aiModel">模型名</label>
+     <label class="ai-field-label" for="aiModel">模型名</label>
       <input id="aiModel" class="set-input ai-field-input" type="text" placeholder="gpt-4o-mini" spellcheck="false" />
-          <p class="ai-field-hint">如 gpt-4o-mini · gpt-4o · claude-3.5 · llama3</p>
+          <p class="ai-field-hint">如 gpt-4o-mini · gpt-4o · claude-3.5-sonnet · deepseek-chat · llama3</p>
      </div>
-          </div>
+     </div>
 
-          <!-- 操作条：测试连接（自动保存已经无声完成，不再需要独立"保存"按钮） -->
-      <div class="ai-actions">
-  <div class="ai-actions-hint">改动会自动保存 · 用「测试连接」验证 Key 是否真的能通</div>
+          <!-- 操作条：仅在接了 AI 时展示（改动会自动保存，无需"保存"按钮） -->
+      <div class="ai-actions" id="aiActions" hidden>
+  <div class="ai-actions-hint">填完自动保存 · 点「测试连接」验证 Key 能否真的调通</div>
      <button id="aiTest" class="btn btn-primary btn-sm" type="button">测试连接</button>
-            <button id="aiSave" class="btn btn-ghost btn-sm" type="button" hidden aria-hidden="true">保存 AI 设置</button>
-          </div>
+      <button id="aiSave" class="btn btn-ghost btn-sm" type="button" hidden aria-hidden="true">保存 AI 设置</button>
+       </div>
 
      <!-- 诊断反馈（默认隐藏，点了"测试连接"才展开） -->
    <div class="ai-test-result" id="aiTestResult" hidden>
-            <div id="aiTestBody" class="ai-fallback"></div>
+<div id="aiTestBody" class="ai-fallback"></div>
           </div>
 
-          <!-- AI 用途 · 折叠区（默认收起，节省空间） -->
+    <!-- AI 用途 · 折叠区（默认收起，节省空间） -->
 <details class="ai-usage-panel">
   <summary>
-        <svg class="ai-usage-chev" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
- <span>AI 会用在哪 4 个地方</span>
-            </summary>
+     <svg class="ai-usage-chev" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+ <span>接了 AI 之后，能多做什么？</span>
+     </summary>
    <ul class="ai-usage">
-         <li><b>记一笔的语义解析</b>——理解口语化指代，自动匹配已有对接人。</li>
-           <li><b>话术库生成话术</b>——结合模板提示词 + 对接人身份 + 事项上下文。</li>
-              <li><b>「推一下」自动话术</b>——综合人设 + 全部历史话术风格生成一句。</li>
-       <li><b>一键生成周报</b>——把本周流水揉成可直接发的一段中文周报。</li>
+         <li><b>记一笔时听得懂人话</b>——把"客户催我合同"理解成事项 + 自动匹配对接人「王经理」。</li>
+      <li><b>话术能像"你"</b>——综合对方人设 + ta 的历史话术风格生成一句，不再是模板占位符替换。</li>
+          <li><b>「推一下」按对方来</b>——桌宠气泡里直接给一句适合当下场景的话，一键复制。</li>
+ <li><b>周报揉成人话</b>——把本周流水汇总成可以直接发给上级的一段中文，不是干巴巴的清单。</li>
      </ul>
  </details>
         </section>
 
   <!-- ③ 工作区记录 -->
    <section class="ws-list-card">
-        <header class="ai-card-head">
- <h3 class="ai-card-title">工作区记录</h3>
-       <p class="ai-card-sub">复制任何一条 Token 都可在别处切回；「切到此工作区」直接载入它的数据。</p>
-        </header>
-          <div class="ws-table-wrap">
-    <table class="ws-table" id="wsTable">
-         <thead><tr><th>工作区</th><th>Token</th><th>创建时间</th><th class="ws-op-col">操作</th></tr></thead>
-              <tbody id="wsBody"><tr><td colspan="4" class="ws-empty">加载中…</td></tr></tbody>
-          </table>
+    <header class="ai-card-head ws-list-head">
+   <div>
+     <h3 class="ai-card-title">工作区记录</h3>
+     <p class="ai-card-sub">本机记住的所有工作区。任何时刻都可以切回过往的某个 token，数据完整保留。</p>
           </div>
+  <button id="wsRefresh" class="btn btn-ghost btn-sm" type="button" title="刷新">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/></svg>
+              <span>刷新</span>
+   </button>
+        </header>
+  <div class="ws-table-wrap">
+<table class="ws-table" id="wsTable">
+     <thead><tr><th>工作区</th><th>Token</th><th>创建时间</th><th class="ws-op-col">操作</th></tr></thead>
+         <tbody id="wsBody"><tr><td colspan="4" class="ws-empty">加载中…</td></tr></tbody>
+     </table>
+  </div>
         </section>
       </section>
     </main>

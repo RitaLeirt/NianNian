@@ -1490,8 +1490,13 @@ scriptItem = it;
   });
   $('#tokenRename').addEventListener('click', async function () {
     var label = $('#tokenLabel').value.trim();
-    try { await API.put('/api/auth/token', { label: label }); toast('工作区名称已保存'); loadWorkspaceRecords(); }
-    catch (e) { toast('保存失败', 'error'); }
+    try {
+      await API.put('/api/auth/token', { label: label });
+      toast('工作区名称已保存');
+      // 同步刷新：身份卡（名称）+ 工作区记录表（该行的名称也要更新）
+      loadTokenPanel();
+      loadWorkspaceRecords();
+    } catch (e) { toast('保存失败', 'error'); }
   });
   $('#tokenRegen').addEventListener('click', async function () {
     var ok = await confirm('新建一个全新的空工作区并切过去？当前工作区（Token、名称、数据）会完整保留，可随时从下方「工作区记录」切回。');
@@ -1515,8 +1520,14 @@ scriptItem = it;
   });
   $('#regenClose').addEventListener('click', function () { $('#regenModal').hidden = true; });
   $('#regenCopy').addEventListener('click', function () {
-    if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textContent);
+if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textContent);
     toast('已复制 Token');
+  });
+  // 手动刷新工作区记录：切换工作区/改名/新建后会自动刷新；这里提供一个"我不放心"的手动入口
+  var wsRefreshBtn = $('#wsRefresh');
+  if (wsRefreshBtn) wsRefreshBtn.addEventListener('click', function () {
+    loadWorkspaceRecords();
+    toast('已刷新工作区记录');
   });
 
   // 工作区记录列表：名称 / Token / 创建时间 / 操作（复制 · 切到此工作区查看数据）
@@ -1563,9 +1574,20 @@ scriptItem = it;
   /* ---------------- AI 设置 ---------------- */
   function syncAiCfgVisibility(src) {
     var byo = src === 'byo', ollama = src === 'ollama';
+    var isLocal = !byo && !ollama;
+    // BYO 才需要 API Key；两个远程来源都需要 Base URL + 模型名
     $('#aiCfgByo').hidden = !byo;
     $('#aiCfgBase').hidden = !(byo || ollama);
     $('#aiCfgModel').hidden = !(byo || ollama);
+    // 本地规则整块隐藏字段/操作/诊断，展示空态说明；BYO/Ollama 才展示配置区
+    var emptyState = $('#aiEmptyState');
+    var fieldsEl = $('#aiFields');
+    var actionsEl = $('#aiActions');
+    var testResEl = $('#aiTestResult');
+    if (emptyState) emptyState.hidden = !isLocal;
+    if (fieldsEl) fieldsEl.hidden = isLocal;
+    if (actionsEl) actionsEl.hidden = isLocal;
+  if (isLocal && testResEl) testResEl.hidden = true;
   }
   // 全站 AI 状态缓存：sidebar 顶部指示灯 + 各处功能按需查询
   var aiStatusCache = { connected: false, source: 'local', model: '' };
