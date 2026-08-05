@@ -830,9 +830,15 @@ scriptItem = it;
       out.value = (r && r.text) || '（没能生成，稍后再试）';
       src.hidden = false;
       if (r && r.ai) {
-        src.textContent = '· AI 依据「' + (it.person || '对方') + '」的偏好与本条事项生成';
-        src.classList.add('is-ai');
-      } else {
+      var person = it.person || '对方';
+        var sourceHint = '· AI 结合本条事项生成';
+    if (r.source === 'ai+persona+scripts') sourceHint = '· AI 综合 ' + person + ' 的人设 + 历史话术生成';
+        else if (r.source === 'ai+persona') sourceHint = '· AI 依据 ' + person + ' 的人设生成';
+        else if (r.source === 'ai+scripts') sourceHint = '· AI 学习 ' + person + ' 的历史话术风格生成';
+        else if (r.source === 'ai+contact') sourceHint = '· AI 依据 ' + person + ' 的身份生成';
+     src.textContent = sourceHint;
+    src.classList.add('is-ai');
+    } else {
         var hint = (r && r.source === 'saved') ? '· 套用了 ' + (it.person || '对方') + ' 的既有话术'
  : (r && r.source === 'template') ? '· 套用了匹配模板（AI 未启用）'
           : '· 念念自动拟的';

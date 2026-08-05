@@ -866,79 +866,120 @@ const Templates = {
   async generate(owner, itemId, tplId, colleagueId) {
     const it = db.prepare('SELECT * FROM items WHERE id=? AND owner=?').get(itemId, owner);
     const tpl = db.prepare('SELECT * FROM templates WHERE id=? AND (builtin=1 OR owner=?)').get(tplId, owner);
-    if (!it || !tpl) return null;
+  if (!it || !tpl) return null;
     let colleague = null;
     if (colleagueId) colleague = db.prepare('SELECT * FROM colleagues WHERE id=? AND owner=?').get(colleagueId, owner);
     // 未显式指定对接人时，按事项里的「对方」姓名自动匹配已有对接人，让其身份/人设进入提示词
     if (!colleague && it.person) colleague = db.prepare('SELECT * FROM colleagues WHERE owner=? AND name=?').get(owner, it.person);
+    // 拉这个对接人已存的所有话术（不是最新一条），作为 AI 生成的"风格样本"
+    const savedScripts = colleague
+      ? db.prepare('SELECT * FROM contact_scripts WHERE owner=? AND colleague_id=? ORDER BY created_at DESC').all(owner, colleague.id)
+      : [];
     const fallback = Templates.render(owner, itemId, tplId) || { text: '', item: it.title, template: tpl.name };
 
-    const s = Settings.get(owner);
+  const s = Settings.get(owner);
     const aiEnabled = s.aiSource && s.aiSource !== 'local' && (s.apiKey || s.aiSource === 'ollama');
 
-    // 未接 AI：直接用预设模板句子（占位符替换）
+// 未接 AI：直接用预设模板句子（占位符替换）
     if (!aiEnabled) {
       return Object.assign(fallback, { ai: false, error: 'ai_not_configured' });
- }
+    }
 
-    // 接了 AI：必须用提示词生成
+    // 接了 AI：以模板 scorpion 为 system；user 里把 persona 和已存话术都塞进去
     const sys = (tpl.scorpion && tpl.scorpion.trim())
-      ? tpl.scorpion
+ ? tpl.scorpion
       : '你是沟通话术助手，根据场景生成一句自然、得体、可直接发送的中文消息。';
-    let user = '场景：' + (tpl.scene || '') + '\n目的：' + (tpl.purpose || '') + '\n语气：' + (tpl.tone || '') + '\n事项：' + it.title;
-    if (it.person) user += '\n对方：' + it.person;
+    let user = '【本次任务】\n场景：' + (tpl.scene || '') + '\n目的：' + (tpl.purpose || '') + '\n语气：' + (tpl.tone || '') + '\n事项：' + it.title;
+  if (it.person) user += '\n对方：' + it.person;
     if (it.waiting) user += '\n在等：' + it.waiting;
-    if (colleague) user += '\n对接人身份：' + (colleague.role || '') + (colleague.persona ? '（' + colleague.persona + '）' : '') + '，关系：' + (colleague.relation || '');
-    user += '\n请只输出一句可直接发送的话术，不要解释、不要加引号。';
+    if (it.next_step) user += '\n下一步动作：' + it.next_step;
+    if (colleague) {
+      user += '\n\n【对方情况】\n身份：' + (colleague.role || '未知') + '\n关系：' + (colleague.relation || '未知');
+      // 人设作为「沟通偏好」单独强调——这是决定语气/说话方式的关键约束
+      if (colleague.persona && colleague.persona.trim()) {
+     user += '\n沟通偏好（重要，请严格遵循）：' + colleague.persona.trim();
+      }
+    }
+    // 已存话术作为「风格样本」全量提供——让 AI 学习你与 ta 沟通的一贯口吻
+    if (savedScripts.length) {
+      user += '\n\n【与 ta 沟通的历史话术（学习这些的语气与用词习惯）】';
+      savedScripts.slice(0, 5).forEach(function (sc, i) {
+    user += '\n' + (i + 1) + '. ' + (sc.name ? '[' + sc.name + '] ' : '') + sc.body;
+      });
+  }
+    user += '\n\n【输出要求】只输出一句可直接发送的话术，不要解释、不要加引号；如"沟通偏好"中有明确要求（如英文/结论先行等），必须遵守。';
     const ai = await callAI(owner, sys, user);
     if (ai) return { text: ai, item: it.title, template: tpl.name, ai: true };
-  // AI 已启用但调用失败：不静默降级——返回 error 让前端提示用户检查配置
-return Object.assign(fallback, { ai: false, error: 'ai_call_failed' });
+    // AI 已启用但调用失败：不静默降级——返回 error 让前端提示用户检查配置
+    return Object.assign(fallback, { ai: false, error: 'ai_call_failed' });
   },
-  // 「推一下」自动话术：无需用户选模板。依据事项(对方/下一步/在等) + 对接人已填描述与已存话术，
-  // 有 AI 就让 AI 直接生成；没填对接人描述/话术模板时也能自主生成一句。返回 { text, ai, source }。
+  // 「推一下」自动话术：无需用户选模板。综合事项(对方/下一步/在等) + 对接人「人设」+ 全部已存话术风格。
+  // 有 AI 就让 AI 直接生成；没填对接人描述/话术模板时也能自主生成一句。返回 { text, ai, source, error }。
   async autoScript(owner, itemId) {
     const it = db.prepare('SELECT * FROM items WHERE id=? AND owner=?').get(itemId, owner);
     if (!it) return null;
     const person = it.person || '对方';
     const waiting = it.waiting || '';
     const nextStep = it.next_step || '';
-    // 按事项对方姓名找对接人 + ta 已存的话术（用户填好的描述/话术模板）
+// 按事项对方姓名找对接人 + ta 已存的所有话术（不再是最新 1 条）
     let colleague = it.person ? db.prepare('SELECT * FROM colleagues WHERE owner=? AND name=?').get(owner, it.person) : null;
-    let savedScript = colleague ? db.prepare('SELECT * FROM contact_scripts WHERE owner=? AND colleague_id=? ORDER BY created_at DESC').get(owner, colleague.id) : null;
-    // 若没有对接人已存话术，挑一个场景贴近的模板作参考/回退
+    const savedScripts = colleague
+? db.prepare('SELECT * FROM contact_scripts WHERE owner=? AND colleague_id=? ORDER BY created_at DESC').all(owner, colleague.id)
+      : [];
+    const savedScript = savedScripts[0] || null; // 无 AI 时的兜底：取最近一条占位符渲染
+ // 若没有对接人已存话术，挑一个场景贴近的模板作参考/回退
     let tpl = savedScript ? null : (
       db.prepare("SELECT * FROM templates WHERE (builtin=1 OR owner=?) AND scene IN ('跟进','确认','催款','求助') ORDER BY builtin DESC LIMIT 1").get(owner)
       || db.prepare('SELECT * FROM templates WHERE builtin=1 OR owner=? LIMIT 1').get(owner)
     );
     const fillPh = (s) => (s || '').replace(/\{对方\}/g, person).replace(/\{在等\}/g, waiting || '这件事').replace(/\{事\}/g, it.title || '这件事');
 
-    // 有 AI：把事项 + 对接人描述 + 既有话术风格喂给 AI，直接生成一句可复制话术
-    const sys = (tpl && tpl.scorpion && tpl.scorpion.trim())
+    // 有 AI：把事项 + 人设 + 全部已存话术风格都喂给 AI
+ const sys = (tpl && tpl.scorpion && tpl.scorpion.trim())
       ? tpl.scorpion
-      : '你是贴心的职场沟通助手。请只输出一句可直接发送给对方的中文消息，自然、得体、简洁，不要解释、不要加引号。';
-    let user = '事项：' + it.title + '\n对方：' + person;
+    : '你是贴心的职场沟通助手。请只输出一句可直接发送给对方的中文消息，自然、得体、简洁，不要解释、不要加引号。';
+    let user = '【本次任务】\n事项：' + it.title + '\n对方：' + person;
     if (nextStep) user += '\n下一步动作：' + nextStep;
     if (waiting) user += '\n还在等：' + waiting;
     if (colleague) {
-      user += '\n对方身份：' + (colleague.role || '未知') + '，关系：' + (colleague.relation || '未知');
-      if (colleague.persona) user += '\n对方特点：' + colleague.persona;
+      user += '\n\n【对方情况】\n身份：' + (colleague.role || '未知') + '\n关系：' + (colleague.relation || '未知');
+      // 人设作为「沟通偏好」单独强调
+   if (colleague.persona && colleague.persona.trim()) {
+    user += '\n沟通偏好（重要，请严格遵循）：' + colleague.persona.trim();
+  }
     }
-    if (savedScript) user += '\n可参考的既有话术风格：' + savedScript.body;
-    user += '\n请据此写一句可直接发送的话术。';
+    // 已存话术作为「风格样本」全量提供
+    if (savedScripts.length) {
+      user += '\n\n【与 ta 沟通的历史话术（学习这些的语气与用词习惯）】';
+   savedScripts.slice(0, 5).forEach(function (sc, i) {
+   user += '\n' + (i + 1) + '. ' + (sc.name ? '[' + sc.name + '] ' : '') + sc.body;
+   });
+    }
+    user += '\n\n【输出要求】只输出一句可直接发送的话术，不要解释、不要加引号；如"沟通偏好"中有明确要求（如英文/结论先行等），必须遵守。';
     const ai = await callAI(owner, sys, user);
-    if (ai) return { text: ai, ai: true, source: colleague ? 'ai+contact' : 'ai' };
+    if (ai) {
+      // source 更细粒度：既有人设又有已存话术 → ai+persona+scripts；只有其一也各自标注
+ let source = 'ai';
+      if (colleague) {
+        const hasPersona = colleague.persona && colleague.persona.trim();
+        const hasScripts = savedScripts.length > 0;
+      if (hasPersona && hasScripts) source = 'ai+persona+scripts';
+      else if (hasPersona) source = 'ai+persona';
+        else if (hasScripts) source = 'ai+scripts';
+        else source = 'ai+contact';
+      }
+  return { text: ai, ai: true, source: source };
+    }
 
     // 无 AI 回退：优先用对接人已存话术 → 匹配模板 → 自主兜底生成。
-    // 同时标注回退原因，前端可据此提示用户检查 AI 配置。
     const s = Settings.get(owner);
     const reason = (!s.aiSource || s.aiSource === 'local') ? 'ai_not_configured' : 'ai_call_failed';
     if (savedScript) return { text: fillPh(savedScript.body), ai: false, source: 'saved', error: reason };
     if (tpl) return { text: fillPh(tpl.body), ai: false, source: 'template', error: reason };
     const auto = person + '你好，关于「' + it.title + '」'
       + (waiting ? '（还在等' + waiting + '）' : '')
-      + (nextStep ? '，我这边下一步是「' + nextStep + '」' : '')
-      + '，方便的话今天想跟你对一下，看看需要我先准备什么？';
+    + (nextStep ? '，我这边下一步是「' + nextStep + '」' : '')
+ + '，方便的话今天想跟你对一下，看看需要我先准备什么？';
     return { text: auto, ai: false, source: 'auto' };
   },
 };
