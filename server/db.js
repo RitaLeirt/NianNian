@@ -1028,9 +1028,10 @@ const Pet = {
   get(owner) {
     seedFor(owner);
     let row = db.prepare('SELECT * FROM pet WHERE owner=?').get(owner);
-    // 新工作区没被 seed（白名单）→ 补一个中性默认桌宠行，避免后续 update/pet 无行可改
+    // 新工作区没被seed（白名单）→ 补一个中性默认桌宠行，避免后续 update/pet 无行可改。
+    // 【关键】x/y 留 NULL，让前端使用 CSS 默认位置（右下角），而不是被 80,80 拖到左上。
     if (!row) {
-      db.prepare('INSERT INTO pet (owner, name, tone, skin, intimacy, x, y) VALUES (?,?,?,?,0,80,80)')
+      db.prepare('INSERT INTO pet (owner, name, tone, skin, intimacy, x, y) VALUES (?,?,?,?,0,NULL,NULL)')
         .run(owner, '念念', 'gentle', 'default');
       row = db.prepare('SELECT * FROM pet WHERE owner=?').get(owner);
     }
