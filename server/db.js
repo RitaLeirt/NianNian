@@ -306,12 +306,20 @@ const Auth = {
     db.prepare('UPDATE auth_tokens SET last_used=? WHERE token=?').run(Date.now(), token);
   },
   get(token) { return db.prepare('SELECT * FROM auth_tokens WHERE token=?').get(token) || null; },
-  // 工作区列表：真实用户创建的 + 顶部固定"示例工作区"（DEFAULT_OWNER 虚拟行）
-  // 前端据此展示，切回示例工作区就能看到当初 seed 的演示数据。
-  list() {
-    const real = db.prepare('SELECT * FROM auth_tokens ORDER BY created_at DESC').all();
+  // 工作区列表：仅返回"demo + 当前 owner 自己"（隐私修复）。
+  // 【关键】之前会返回本实例上所有用户创建过的 token —— 相当于把所有人的私有工作区
+  // 都公开列给任何访问者。现在按 owner 过滤，配合客户端 localStorage 台账
+  // 恢复本机曾创建过的其它工作区（那些数据本来就在本机才可见）。
+  listForOwner(owner) {
     const demoRow = { token: DEFAULT_OWNER, label: '示例工作区', created_at: 0, last_used: null, is_demo: 1 };
-return [demoRow].concat(real);
+    if (!owner || owner === DEFAULT_OWNER) return [demoRow];
+    const mine = db.prepare('SELECT * FROM auth_tokens WHERE token=?').get(owner);
+    return mine ? [demoRow, mine] : [demoRow];
+  },
+  // 兼容旧代码：保留同名 list() 但返回空的真实列表 + demo（防止误调返回全库）
+  list() {
+    const demoRow = { token: DEFAULT_OWNER, label: '示例工作区', created_at: 0, last_used: null, is_demo: 1 };
+    return [demoRow];
   },
   rename(token, label) {
     db.prepare('UPDATE auth_tokens SET label=? WHERE token=?').run(label || '', token);
@@ -1019,7 +1027,14 @@ const Templates = {
 const Pet = {
   get(owner) {
     seedFor(owner);
-    return db.prepare('SELECT * FROM pet WHERE owner=?').get(owner);
+    let row = db.prepare('SELECT * FROM pet WHERE owner=?').get(owner);
+    // 新工作区没被 seed（白名单）→ 补一个中性默认桌宠行，避免后续 update/pet 无行可改
+    if (!row) {
+      db.prepare('INSERT INTO pet (owner, name, tone, skin, intimacy, x, y) VALUES (?,?,?,?,0,80,80)')
+        .run(owner, '念念', 'gentle', 'default');
+      row = db.prepare('SELECT * FROM pet WHERE owner=?').get(owner);
+    }
+    return row;
   },
   update(owner, data) {
     seedFor(owner);

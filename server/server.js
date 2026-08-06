@@ -115,9 +115,9 @@ async function handleApi(req, res, url) {
   try {
   /* ======== Auth（Token 签发与管理） ======== */
     if (resource === 'auth') {
-      // GET /api/auth/tokens：工作区记录（含顶部固定的示例工作区）
-   if (method === 'GET' && seg[2] === 'tokens') {
-    return sendJSON(res, 200, { tokens: Auth.list() });
+      // GET /api/auth/tokens：工作区记录（仅 demo + 当前 owner 自己；避免暴露其它用户的 token）
+      if (method === 'GET' && seg[2] === 'tokens') {
+        return sendJSON(res, 200, { tokens: Auth.listForOwner(owner) });
       }
     if (method === 'POST' && seg[2] === 'token') {
         const body = await readBody(req);

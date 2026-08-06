@@ -2107,7 +2107,7 @@ try {
         // 宽限期结束再确认一次：没聚焦、没图、鼠标不在面板上才收
         if (feedInput === document.activeElement || feedImages.length || feedEl.matches(':hover')) return;
         doCollapse();
-      }, 2600);
+      }, 1000);
     }
     function doCollapse() {
       feedEl.classList.remove('open');
