@@ -55,11 +55,26 @@
     async patch(u, body) { return (await fetch(u, { method: 'PATCH', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body || {}) })).json(); },
     async del(u) { return (await fetch(u, { headers: authHeaders(), method: 'DELETE' })).json(); },
   };
-  // 首次打开：默认进入演示工作区（demo-default），里面已预置完整的示例数据，打开即可体验；
-  // 如需独立工作区，可在“宠物/账号”面板重新生成专属 token。
+  // 首次打开：默认进入示例工作区（demo-default），里面已预置完整的示例数据，打开即可体验；
+  // 如需独立工作区，可在"账户与令牌"面板新建。
+  // 【自愈】启动时如果本机 localStorage 里已经存了非demo token，先主动 adopt 一次——
+  // 让当前 Vercel 实例把这个 token 登记到 auth_tokens 表，避免"看似切了但服务端不认"。
   var tokenReady = (async function bootstrapToken() {
-    if (getToken()) return;
-    setToken('demo-default');
+    var t = getToken();
+    if (!t) { setToken('demo-default'); return; }
+    if (t === 'demo-default') return;
+    try {
+      // 从本机台账取原label（如果有）
+      var ledger = (function () {
+        try { return JSON.parse(localStorage.getItem('niannian-workspaces') || '{}') || {}; } catch (e) { return {}; }
+      })();
+      var known = ledger[t];
+      await fetch('/api/auth/adopt', {
+    method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+        body: JSON.stringify({ token: t, label: (known && known.label) || '我的工作区', created_at: known && known.created_at }),
+      });
+    } catch (e) { /* 静默：adopt 失败也不阻塞正常流程 */ }
   })();
 
   /* ---------------- Toast ---------------- */
@@ -1498,15 +1513,39 @@ scriptItem = it;
 
   /* ---------------- 账户与令牌 ---------------- */
   async function loadTokenPanel() {
+ var currentToken = getToken();
     var me = await API.get('/api/auth/me');
+
+    // 自愈：客户端 localStorage 记着一个非 demo 的 token，但服务端却返回 demo-default，
+    // 说明当前 Vercel 实例的 /tmp 里没有这个 token（多实例路由/冷启动导致）。
+    // 从本机台账捞出原label 补一次 adopt，然后重新拉 me——这样切换/刷新后
+    // Token 字段就不会再"看起来切到了但服务端不认"。
+    if (currentToken && currentToken !== 'demo-default' && me.owner === 'demo-default') {
+      var ledger = readLedger();
+      var known = ledger[currentToken];
+      if (known) {
+   try {
+     await API.post('/api/auth/adopt', { token: currentToken, label: known.label, created_at: known.created_at });
+        me = await API.get('/api/auth/me');
+   } catch (e) { /* 静默：最坏情况和自愈之前一样 */ }
+      } else {
+        // 台账没记录（比如用户手工粘贴了一个 token 但页面刷新前还没触发 recordWorkspace）
+        // 用一个中性 label adopt 一下再重试
+      try {
+    await API.post('/api/auth/adopt', { token: currentToken, label: '我的工作区' });
+     me = await API.get('/api/auth/me');
+        } catch (e) { /* 静默 */ }
+      }
+    }
+
     $('#tokenValue').textContent = me.owner;
     $('#tokenLabel').value = me.label || '';
-    var isDefault = !!me.isDefault;
+ var isDefault = !!me.isDefault;
     // 演示工作区不支持改名（后端限制），但可以「新建空白工作区」新建一份自己的
- $('#tokenRename').disabled = isDefault;
+    $('#tokenRename').disabled = isDefault;
     $('#tokenRegen').disabled = false;
     $('#tokenLabel').placeholder = isDefault ? '示例工作区（新建工作区后可改名）' : '工作区名称';
-    // 把当前工作区写进客户端台账（非 demo 才记）——即使后端 /tmp 冷启动丢了，本机也不会"忘记"
+    // 把当前工作区写进客户端台账（非demo 才记）——即使后端 /tmp 冷启动丢了，本机也不会"忘记"
     if (!isDefault) recordWorkspace({ token: me.owner, label: me.label, created_at: me.created_at });
   }
   $('#tokenCopy').addEventListener('click', function () {
@@ -1604,29 +1643,31 @@ if (navigator.clipboard) navigator.clipboard.writeText($('#regenToken').textCont
   //   6. 验证 /api/auth/me 是否真的返回了新 token（如果服务端 fallback 到 demo，用户能看到）
   async function switchToToken(token, label, isDemo) {
  try {
-      if (!isDemo) {
-   // 非 demo 才需要 adopt——demo 是服务端固定虚拟行
-        try { await API.post('/api/auth/adopt', { token: token, label: label }); }
-        catch (e) { /* adopt 失败不阻塞切换，最坏情况和以前一样 */ }
-      }
+      // 先把 token 记进本机台账,让 loadTokenPanel 的自愈能读到 label
+   if (!isDemo) recordWorkspace({ token: token, label: label, created_at: Date.now() });
       setToken(token);
       personFilterCache = null; tplFacets = null; journalCache = null;
+      if (!isDemo) {
+   // 最多 3 次adopt+me 重试（Vercel 多实例路由可能让 adopt 和 me 打到不同实例）
+   for (var i = 0; i < 3; i++) {
+      try { await API.post('/api/auth/adopt', { token: token, label: label }); }
+    catch (e) { /*静默 */ }
+    var me = await API.get('/api/auth/me').catch(function () { return null; });
+     if (me && me.owner === token) break;
+   // 命中不同实例：短暂等待后重试
+       await new Promise(function (r) { setTimeout(r, 120); });
+        }
+   }
       switchWsTab('current');
-    // 立刻校验：me 接口真的返回了这个 token 吗？
-   var me = await API.get('/api/auth/me').catch(function () { return null; });
-      if (me && !isDemo && me.owner !== token) {
-        // 服务端把它当 demo 处理了（罕见）——提示用户 & 兜底继续
-        toast('服务端未识别此工作区，已切到示例数据', 'error');
-      }
       await Promise.all([
-        Promise.resolve(loadTokenPanel()),
-        Promise.resolve(loadWorkspaceRecords()),
-    Promise.resolve(refreshAiStatus()),
-    (typeof loadBoard === 'function') ? Promise.resolve(loadBoard()) : Promise.resolve(),
-    ]);
+      Promise.resolve(loadTokenPanel()),
+   Promise.resolve(loadWorkspaceRecords()),
+      Promise.resolve(refreshAiStatus()),
+     (typeof loadBoard === 'function') ? Promise.resolve(loadBoard()) : Promise.resolve(),
+      ]);
       toast(isDemo ? '已切回示例工作区' : '已切到「' + (label || '工作区') + '」');
     } catch (e) {
-      toast('切换失败，请重试', 'error');
+   toast('切换失败，请重试', 'error');
     }
   }
 
